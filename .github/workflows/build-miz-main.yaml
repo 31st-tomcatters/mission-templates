@@ -15,7 +15,7 @@ jobs:
       - name: 'force mission version with git tag'
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          npm run jtff-version $GITHUB_REF_NAME
+          npm run 31st-version $GITHUB_REF_NAME
       - name: 'Do Release'
         run: |
           npm run 31st-release
