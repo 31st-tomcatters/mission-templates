@@ -22,7 +22,7 @@ jobs:
       - name: 'set snapshot version'
         if: startsWith(github.ref, 'refs/heads/develop')
         run: |
-          npm run jtff-version ${{ fromJson(steps.getConfig.outputs.config).general.missionVersion }}$GITHUB_RUN_NUMBER
+          npm run 31st-version ${{ fromJson(steps.getConfig.outputs.config).general.missionVersion }}$GITHUB_RUN_NUMBER
       - name: 'build missions'
         run: |
           npm run build
