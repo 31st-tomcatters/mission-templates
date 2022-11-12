@@ -1,0 +1,41 @@
+{
+  "name": "31st-templates",
+  "version": "1.0.0-snapshot",
+  "description": "build 31st-template missions",
+  "main": "none",
+  "scripts": {
+    "31st-version": "node src/nodejs/jtff-version.js",
+    "31st-release": "node src/nodejs/release.js",
+    "31st-nextversion": "node src/nodejs/prepare-nextversion.js",
+    "31st-getmiz": "node src/nodejs/get-mizfiles.js",
+    "31st-publish": "node src/nodejs/publish.js",
+    "31st-upload": "node src/nodejs/ftpupload.js",
+    "31st-template": "node src/nodejs/template-update.js",
+    "31st-inject": "node src/nodejs/inject-scripts.js",
+    "build": "node src/nodejs/build.js",
+    "clean": "node src/nodejs/clean.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/31st-tomcatters/mission-templates.git"
+  },
+  "author": "Sebastien LONGO",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/31st-tomcatters/mission-templates/issues"
+  },
+  "homepage": "https://github.com/31st-tomcatters/mission-templates#readme",
+  "dependencies": {
+    "fs": "^0.0.1-security",
+    "ftp": "^0.3.10",
+    "googleapis": "^92.0.0",
+    "jszip": "^3.7.1",
+    "lua-json": "^1.0.0",
+    "path": "^0.12.7",
+    "prompt": "^1.3.0",
+    "util": "^0.12.4"
+  },
+  "exports": [
+    "src/nodejs/jtff-version.js"
+  ]
+}

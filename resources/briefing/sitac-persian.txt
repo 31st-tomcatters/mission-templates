@@ -1,0 +1,21 @@
+BULLS : N 25°14.3'   E 54°13.147'
+
+
+RANGES :
+
+- Range 1 : Côte UAE : N 24° 6.858'   E 052°54.290'  007 ft
+
+- OMD25 : SUDEST Al Dahfra :  N 23°39. 88'   E 055° 8.660' 433 ft
+
+OMD 33 : SUDEST LIWA N 23° 9.245'   E 54°21.888' 421 ft
+
+- Range 3 : (légerement défendu) montagne SUD Khassab :
+N 25° 51' 37'' E 056° 13' 17'' 1188 ft
+
+ATTENTION TRAFFIC CIVIL
+
+CSG 1 : CVN71 dans le Golfe d'OMAN : 71X - ICLS 11 - DL4=336.10Mhz
+
+CSG 2 : CVN73 dans le détroit d'Hormuz : 73X - ICLS : 13 - DL4=336.30Mhz
+
+TARAWA LHA-1 : 51X ICLS 20

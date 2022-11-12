@@ -1,0 +1,42 @@
+** Naval A2A training zone with FOX training scripts**
+MGRS = TF+TE+1/2*QA+1/2*QV
+
+** USAF A2A training zone with FOX training scripts**
+MGRS = VC+WC+1/2*XC
+
+** Naval A2G training range at Cyprus**
+MGRS = VD38
+Documentation here -> https://docs.google.com/document/d/16BSchDDEBZCKe3xUXBRrgPawTW8tUxVilKtFcH-BeBY/edit?usp=sharing
+
+** SAM IADS SA17 implemented at Bassel-El-Assad**
+MGRS = YE62
+
+** SAM IADS On Syria Territory
+Documentation on https://drive.google.com/drive/folders/1WRh9TvolEpLJy-c-IrJGYQNO7qzPu5S9?usp=sharing
+
+--------------------
+OnDemand TANKER BLUE à placer avec un marker en vue F10 :
+avec MIN = le nombre de minutes ou le tanker doit orbiter sur zone
+avec FLV = le FL du tanker
+avec SPD = la vitesse en noeud du tanker
+avec HDG = le cap en degre de l hyppodrome
+avec LGT = la longueur en nautique de l hyppodrome
+
+* TEXACO 1-1 : MPRS 101Y ; 317.500 Mhz
+commande = -tanker-tx1-MIN-FLV-SPD-HDG-LGT
+* TEXACO 3-1 : MPRS 106Y ; 317.500 Mhz
+commande = -tanker-tx3-MIN-FLV-SPD-HDG-LGT
+* ARCO 1-1 : KC135 102Y : 276.200 Mhz
+commande = -tanker-ar1-MIN-FLV-SPD-HDG-LGT
+* ARCO 2-1 : KC135 103Y : 276.200 Mhz
+commande = -tanker-ar2-MIN-FLV-SPD-HDG-LGT
+* ARCO 7-1 : KC135 107Y : 276.200 Mhz
+commande = -tanker-ar7-MIN-FLV-SPD-HDG-LGT
+* SHELL 4-1 : KC130 108Y : 276.200 Mhz
+commande = -tanker-sh4-MIN-FLV-SPD-HDG-LGT
+
+
+--------------------
+FOB Deir ez-Zor 
+RWY 10/28  ---  Tacan DEZ-117X
+US EWR Warrior/Wizard 1  SILVER 1 (265.800MHz)

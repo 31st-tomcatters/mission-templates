@@ -1,0 +1,5 @@
+Russian EWR Eyeball/Darkstar 1  (285.500MHz)
+Syrian   EWR Pointer/Focus 1       (285.700MHz)
+
+--------------------
+H3 TACAN : 122X

@@ -1,0 +1,36 @@
+{
+    "general": {
+        "missionFolder": "dist",
+        "missionPrefix": "Theatre",
+        "missionSuffix": "31st",
+        "missionVersion": "0.5.0"
+    },
+    "google": {
+        "scopes": [
+            "https://www.googleapis.com/auth/drive"
+        ],
+        "tokenPath": "dist/gtoken.json"
+    },
+    "missionTemplates": [
+        {
+            "theatre": "Syria",
+            "prefix": "training",
+            "destFolderId": "1SG3r-50LEDlO52VNXsz-R_xj6gG8owt9"
+        },
+        {
+            "theatre": "PersianGulf",
+            "prefix": "training",
+            "destFolderId": "1J5jrr5dc21woMBE5-Up0RqNQ8d4cJsz9"
+        },
+        {
+            "theatre": "Mariana",
+            "prefix": "training",
+            "destFolderId": "1lhzBxSr28apjLNywAk5EPa_E7Zqzxbtn"
+        },
+        {
+            "theatre": "NTTR",
+            "prefix": "training",
+            "destFolderId": "1UluHRN_iFTQ8H4H7emJMXFnX11Abc_Va"
+        }
+    ]
+}

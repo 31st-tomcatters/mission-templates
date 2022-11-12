@@ -1,0 +1,20 @@
+* ATIS dispo à Andersen sur Black3
+
+* Traffic Civil
+EL Al 757 - 1562
+AirChina A330 - 1563
+Cathay 747 - 1564
+Quantas 747 - 3212
+DHL 757 - 7316
+MEA 320 - 2631
+TNT 737 - 3242
+
+
+Naval Ops:
+* CVN71 - 71X - ICLS11 - DL4=336.00Mhz
+* AIRBOSS Activé : https://flightcontrol-master.github.io/MOOSE_DOCS/Documentation/Ops.Airboss.html
+* Shell-1-1 - Basket - 100Y - FL80
+
+* LHA-1 - 51X - ICLS20
+* AIRBOSS Activé : https://flightcontrol-master.github.io/MOOSE_DOCS/Documentation/Ops.Airboss.html
+* Shell-7-1 - Basket - 101Y - FL80

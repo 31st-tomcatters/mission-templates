@@ -1,0 +1,32 @@
+Champs dde tir sur l'ile de Medinilla
+- N 16° 1' 6"   E 146° 3'33"
+- N 16° 1.112'   E 146° 3.565'
+- CT 99371 71214
+
+            205 ft
+
+**Zone d'entrainement A2A Navy **:
+MGRS = TC+TD+TE
+MGRS = FP+FQ+FR
+
+--------------------
+OnDemand TANKER BLUE à placer avec un marker en vue F10 :
+avec vvv = le nombre de minutes ou le tanker doit orbiter sur zone
+avec www = le FL du tanker
+avec xxx = la vitesse en noeud du tanker
+avec yyy = le cap en degre de l hyppodrome
+avec zzz = la longueur en nautique de l hyppodrome
+
+* TEXACO 4-1 : MPRS 122Y ; 317.500 Mhz
+commande = -tanker-tx4-vvv-www-xxx-yyy-zzz
+* ARCO 5-1 : KC135 125Y : 276.200 Mhz
+commande = -tanker-ar5-vvv-www-xxx-yyy-zzz
+
+* TEXACO 1-1 : MPRS 120Y ; 317.500 Mhz
+commande = -tanker-tx1-vvv-www-xxx-yyy-zzz
+* ARCO 2-1 : KC135 123Y : 276.200 Mhz
+commande = -tanker-ar2-vvv-www-xxx-yyy-zzz
+* TEXACO 7-1 : MPRS 121Y ; 317.500 Mhz
+commande = -tanker-tx7-vvv-www-xxx-yyy-zzz
+* ARCO 6-1 : KC135 124Y : 276.200 Mhz
+commande = -tanker-ar6-vvv-www-xxx-yyy-zzz

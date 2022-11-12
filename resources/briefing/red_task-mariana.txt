@@ -1,0 +1,12 @@
+--------------------
+OnDemand TANKER RED à placer avec un marker en vue F10 :
+avec vvv = le nombre de minutes ou le tanker doit orbiter sur zone
+avec www = le FL du tanker
+avec xxx = la vitesse en noeud du tanker
+avec yyy = le cap en degre de l hyppodrome
+avec zzz = la longueur en nautique de l hyppodrome
+
+* TEXACO 5-1 : MPRS 110Y ; 317.600 Mhz
+commande = -tanker-tx5-vvv-www-xxx-yyy-zzz
+* ARCO 1-1 : KC135 111Y : 276.300 Mhz
+commande = -tanker-ar1-vvv-www-xxx-yyy-zzz

@@ -1,0 +1,75 @@
+name: build-miz-main
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "*.*.*"
+jobs:
+  build-mission-files:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: 'deploy CI scripts'
+        run: npm install
+      - name: 'force mission version with git tag'
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          npm run jtff-version $GITHUB_REF_NAME
+      - name: 'Do Release'
+        run: |
+          npm run jtff-release
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add .
+          git commit -m "skip(ci): freeze version"
+          git push origin HEAD:main
+      - name: 'build missions'
+        run: npm run build
+      - name: 'Tag version'
+        if: ${{ !(startsWith(github.ref, 'refs/tags/')) }}
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag `jq -r .general.missionVersion config.json`
+          git push origin HEAD:main --tags
+      - name: 'publish generated files'
+        env:
+          GDRIVE_TOKEN_CACHE_JSON: ${{ secrets.GDRIVE_TOKEN_CACHE_JSON }}
+        run: |
+          npm run jtff-publish
+      - name: 'upload generated files to DCS Server'
+        env:
+          JTFF_FTP_SECRET_JSON: ${{ secrets.JTFF_FTP_SECRET_JSON }}
+        run: |
+          npm run jtff-upload
+      - name: 'upload generated files to VF84 DCS Server'
+        env:
+          JTFF_FTP_SECRET_JSON: ${{ secrets.VF84_FTP_SECRET_JSON }}
+        run: |
+          npm run jtff-upload
+      - name: 'Discord notification'
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          title: "New templates snapshot${{ github.run_number }} out !!!"
+          description: "Build and upload new Template missions to : JTFF Server , VF84 Server, and Google Drive"
+        uses: sarisia/actions-status-discord@v1.9.0
+      - name: 'Merge main -> develop'
+        uses: devmasx/merge-branch@master
+        with:
+          type: now
+          from_branch: main
+          target_branch: develop
+          github_token: ${{ github.token }}
+      - uses: actions/checkout@v2
+        with:
+          ref: develop
+      - name: 'Prepare next version'
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          npm install
+          npm run jtff-nextversion
+          git add .
+          git commit -m "skip(ci): prepare next version"
+          git push origin HEAD:develop
