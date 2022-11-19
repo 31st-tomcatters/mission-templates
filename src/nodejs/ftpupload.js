@@ -1,8 +1,6 @@
-const jtffci = require("./lib/jtff-lib-ci");
-if (process.env.JTFF_FTP_SECRET_JSON) {
-    const jtffcreds = JSON.parse(process.env.JTFF_FTP_SECRET_JSON);
-    jtffci.uploadMizFiles(jtffcreds);
-} else {
-    console.error('no FTP credentials provided in JTFF_FTP_SECRET_JSON variable');
-    process.exit(1);
-}
+const templatelib = require('@jtff/miztemplate-lib');
+
+const config = require("../../config.json");
+const jtffci = new templatelib.MizTemplateCI(config);
+
+templatelib.ftpupload(jtffci);

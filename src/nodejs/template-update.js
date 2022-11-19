@@ -1,46 +1,5 @@
-const jtffci = require("./lib/jtff-lib-ci");
+const templatelib = require('@jtff/miztemplate-lib');
 const config = require("../../config.json");
-const fs = require("fs");
-const path = require("path");
+const jtffci = new templatelib.MizTemplateCI(config);
 
-
-fs.mkdirSync(config.general.missionFolder, { recursive: true });
-config.missionTemplates.map(async missionTemplate => {
-    await jtffci.mizUpdate([
-        missionTemplate.prefix,
-        '_',
-        missionTemplate.theatre,
-        ".miz"
-    ].join(""), [
-        missionTemplate.prefix,
-        '_',
-        missionTemplate.theatre,
-        "-new.miz"
-    ].join(""), missionTemplate.theatre);
-    if (fs.existsSync([
-        missionTemplate.prefix,
-        '_',
-        missionTemplate.theatre,
-        ".miz"
-    ].join(""))) {
-        fs.unlinkSync([
-            missionTemplate.prefix,
-            '_',
-            missionTemplate.theatre,
-            ".miz"
-        ].join(""));
-    }
-    fs.renameSync([
-        missionTemplate.prefix,
-        '_',
-        missionTemplate.theatre,
-        "-new.miz"
-    ].join(""),
-        [
-            missionTemplate.prefix,
-            '_',
-            missionTemplate.theatre,
-            ".miz"
-        ].join("")
-    );
-});
+templatelib.templateUpdate(jtffci);

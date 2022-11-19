@@ -1,7 +1,5 @@
-const jtffci = require("./lib/jtff-lib-ci");
+const templatelib = require('@jtff/miztemplate-lib');
+const config = require("../../config.json");
+const jtffci = new templatelib.MizTemplateCI(config);
 
-const versionObject = jtffci.getVersion();
-versionObject.releaseSuffix = "";
-
-// console.log(jtffci.displayVersion(versionObject));
-jtffci.setVersion(versionObject);
+templatelib.release(jtffci, "./config.json");

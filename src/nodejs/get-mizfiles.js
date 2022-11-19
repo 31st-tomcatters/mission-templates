@@ -1,3 +1,6 @@
-const jtffci = require("./lib/jtff-lib-ci");
+const templatelib = require('@jtff/miztemplate-lib');
 
-console.log(JSON.stringify(jtffci.getGeneratedMizFilePaths()));
+const config = require("../../config.json");
+const jtffci = new templatelib.MizTemplateCI(config);
+
+templatelib.getmizfiles(jtffci);

@@ -18,11 +18,11 @@ jobs:
       - name: 'set RC version'
         if: startsWith(github.ref, 'refs/heads/release/')
         run: |
-          npm run 31st-version ${{ fromJson(steps.getConfig.outputs.config).general.missionVersion }}$GITHUB_RUN_NUMBER
+          npm run version ${{ fromJson(steps.getConfig.outputs.config).general.missionVersion }}$GITHUB_RUN_NUMBER
       - name: 'set snapshot version'
         if: startsWith(github.ref, 'refs/heads/develop')
         run: |
-          npm run 31st-version ${{ fromJson(steps.getConfig.outputs.config).general.missionVersion }}$GITHUB_RUN_NUMBER
+          npm run version ${{ fromJson(steps.getConfig.outputs.config).general.missionVersion }}$GITHUB_RUN_NUMBER
       - name: 'build missions'
         run: |
           npm run build
@@ -30,20 +30,15 @@ jobs:
         env:
           GDRIVE_TOKEN_CACHE_JSON: ${{ secrets.GDRIVE_TOKEN_CACHE_JSON }}
         run: |
-          npm run 31st-publish
+          npm run gdrive-upload
       - name: 'upload generated files to 31st DCS Server'
         env:
           JTFF_FTP_SECRET_JSON: ${{ secrets.TOMCATTERS_FTP_SECRET_JSON }}
         run: |
-          npm run 31st-upload
-#      - name: 'upload generated files to VF84 DCS Server'
-#        env:
-#          JTFF_FTP_SECRET_JSON: ${{ secrets.VF84_FTP_SECRET_JSON }}
-#        run: |
-#          npm run 31st-upload
-#      - name: 'Discord notification'
-#        with:
-#          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-#          title: "New templates snapshot${{ github.run_number }} out !!!"
-#          description: "Build and upload new Template missions to : JTFF Server , VF84 Server, and Google Drive"
-#        uses: sarisia/actions-status-discord@v1.9.0
+          npm run ftp-upload
+      - name: 'Discord notification'
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          title: "New templates snapshot${{ github.run_number }} out !!!"
+          description: "Build and upload new Template missions to : 31st Server and Google Drive"
+        uses: sarisia/actions-status-discord@v1.9.0

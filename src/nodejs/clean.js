@@ -1,5 +1,4 @@
-const jtffci = require("./lib/jtff-lib-ci");
+const templatelib = require('@jtff/miztemplate-lib');
 const config = require("../../config.json");
-const fs = require("fs");
 
-fs.rmSync(config.general.missionFolder, { force: true, recursive: true })
+templatelib.clean(config);

@@ -48,7 +48,7 @@ function Main()
         return
     }
 
-    $command = "npm run 31st-inject --mission=$file"
+    $command = "npm run inject-scripts --mission=$file"
     Write-Output("Injecting scripts in: $file")
     Invoke-Expression $command
 }
