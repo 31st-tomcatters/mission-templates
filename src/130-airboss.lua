@@ -84,6 +84,68 @@ function forceCarrierDefCon4(params)
     cvGroup:OptionROE(ENUMS.ROE.WeaponFree):OptionAlarmStateRed()
 end
 
+function getCaseTypeFromWeather(CVNCoordinates, recovery_start, recovery_stop)
+    if (CVNCoordinates) then
+        if ((timer.getAbsTime() >= (CVNCoordinates:GetSunset(true) - 30*60)) or (timer.getAbsTime() <= (CVNCoordinates:GetSunrise(true) + 30*60))) then
+            --Navy Night conditions
+            debug_msg("CASE III weather : Navy Night")
+            return 3
+        end
+        if (recovery_stop) then
+            if (recovery_stop > (CVNCoordinates:GetSunset(true) - 30*60)) then
+                --recovery_stop after Navy SunSet
+                debug_msg("CASE III weather : Recovery ending after Navy SunSet")
+                return 3
+            end
+        end
+        if (recovery_start) then
+            if (recovery_start < (CVNCoordinates:GetSunrise(true) + 30*60)) then
+                --recover_start before Navy SunRise
+                debug_msg("CASE III weather : Recovery starting before Navy SunRise")
+                return 3
+            end
+        end
+    end
+    local weather = env.mission.weather
+    local clouds = weather.clouds
+    -- local static = weather.atmosphere_type == 0
+    local visibility = weather.visibility.distance
+    -- local turbulence = weather.groundTurbulence
+    local dust = nil
+    if weather.enable_dust == true then
+        dust = weather.dust_density
+    end
+    local fog = nil
+    if weather.enable_fog == true then
+        fog = weather.fog
+    end
+
+    -- debug_msg(string.format("visibility : %i | cloud : base %i density %i | fog %i,%i | dust %i", visibility, clouds.base, clouds.density, fog.thickness, fog.visibility, dust))
+    local minVisibility = visibility
+    if (weather.enable_fog and fog.thickness > 0) then
+        minVisibility = math.min(minVisibility,fog.visibility)
+    end
+    if (weather.enable_dust) then
+        minVisibility = math.min(minVisibility,dust)
+    end
+
+    if (minVisibility > UTILS.NMToMeters(5)) then
+        if (clouds.base > UTILS.FeetToMeters(3000)) then
+            debug_msg("CASE I weather")
+            return 1
+        elseif (clouds.base > UTILS.FeetToMeters(1000)) then
+            debug_msg("CASE II weather")
+            return 2
+        else
+            debug_msg("CASE III weather")
+            return 3
+        end
+    else
+        debug_msg("CASE III weather")
+        return 3
+    end
+end
+
 AIRBOSSArray = {}
 compteur = 0
 MenuCoalitionCSGCommandsBlue = MENU_COALITION:New(coalition.side.BLUE, "CSG Commands", MenuCoalitionBlue)
@@ -143,7 +205,7 @@ for index, airbossconfig in ipairs(AirBossConfig) do
         objAirboss:SetCarrierControlledArea(airbossconfig.controlarea)
         objAirboss:SetStaticWeather(true)
         objAirboss:SetRespawnAI(false)
-        objAirboss:SetRecoveryCase(airbossconfig.recoverycase)
+        objAirboss:SetRecoveryCase(getCaseTypeFromWeather(nil, nil, nil))
         objAirboss:SetEmergencyLandings(true)
         objAirboss:SetMaxLandingPattern(airbossconfig.maxpatterns)
         objAirboss:SetMaxSectionSize(4)
@@ -193,9 +255,9 @@ for index, airbossconfig in ipairs(AirBossConfig) do
             if airbossconfig.voices.marshall == "Raynor" then
                 objAirboss:SetVoiceOversMarshalByRaynor(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack Marshal Raynor/')
             elseif airbossconfig.voices.marshall == "Gabriella" then
-                    objAirboss:SetVoiceOversMarshalByGabriella(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack Marshal Gabriella/')
+                objAirboss:SetVoiceOversMarshalByGabriella(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack Marshal Gabriella/')
             elseif airbossconfig.voices.marshall == "FF" then
-                    objAirboss:SetVoiceOversMarshalByFF(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack Marshal FF/')
+                objAirboss:SetVoiceOversMarshalByFF(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack Marshal FF/')
             end
         else
             objAirboss:SetVoiceOversMarshalByRaynor(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack Marshal Raynor/')
@@ -204,7 +266,7 @@ for index, airbossconfig in ipairs(AirBossConfig) do
             if airbossconfig.voices.lso == "Raynor" then
                 objAirboss:SetVoiceOversLSOByRaynor(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack LSO Raynor/')
             elseif airbossconfig.voices.lso == "FF" then
-                    objAirboss:SetVoiceOversLSOByFF(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack LSO FF/')
+                objAirboss:SetVoiceOversLSOByFF(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack LSO FF/')
             end
         else
             objAirboss:SetVoiceOversLSOByRaynor(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack LSO Raynor/')
@@ -394,21 +456,19 @@ for index, airbossconfig in ipairs(AirBossConfig) do
                 if self.recoverywindow then
                     if ((timer.getAbsTime() + UTILS.Round(self.customconfig.recoveryops.cyclic.event_duration_minutes*60*1/3, 0) > self.recoverywindow.STOP)
                             or (timer.getAbsTime() + UTILS.Round(self.customconfig.recoveryops.cyclic.event_duration_minutes*60*3/3, 0) < self.recoverywindow.START)) then
-                        if ((timer.getAbsTime() + UTILS.Round(self.customconfig.recoveryops.cyclic.event_duration_minutes*60*3/3, 0)) >= (self:GetCoordinate():GetSunset(true) - 30*60)) then
-                            --fin du prochain event apres la nuit aeronavale
-                            self:MessageToMarshal('switching to case III due to Naval Sunset on the next event !', self.customconfig.alias, "", 45, false, 0)
-                            self:SetRecoveryCase(3)
+                        self:SetRecoveryCase(getCaseTypeFromWeather(
+                                self:GetCoordinate(),
+                                timer.getAbsTime() + UTILS.Round(self.customconfig.recoveryops.cyclic.event_duration_minutes*60*1/3, 0),
+                                timer.getAbsTime() + UTILS.Round(self.customconfig.recoveryops.cyclic.event_duration_minutes*60*3/3, 0)
+                        ))
+                        if self.defaultcase == 1 then
+                            self:SetMaxSectionSize(4)
+                        elseif self.defaultcase == 2 then
+                            self:SetMaxSectionSize(2)
+                        elseif self.defaultcase == 3 then
                             self:SetMaxSectionSize(1)
                         else
-                            if ((timer.getAbsTime() + UTILS.Round(self.customconfig.recoveryops.cyclic.event_duration_minutes*60*1/3, 0)) >= (self:GetCoordinate():GetSunrise(true) + 30*60)) then
-                                --debut du prochain recovery apres l aube aeronavale
-                                self:SetRecoveryCase(self.customconfig.recoverycase)
-                                if self.customconfig.recoverycase == 3 then
-                                    self:SetMaxSectionSize(1)
-                                else
-                                    self:SetMaxSectionSize(4)
-                                end
-                            end
+                            self:SetMaxSectionSize(1)
                         end
                         self:AddRecoveryWindow(
                                 UTILS.Round(self.customconfig.recoveryops.cyclic.event_duration_minutes*60*1/3, 0),
@@ -423,21 +483,22 @@ for index, airbossconfig in ipairs(AirBossConfig) do
                         --LeaveRecovery(self)
                     end
                 else
-                    if ((timer.getAbsTime() + UTILS.Round(self.customconfig.recoveryops.cyclic.event_duration_minutes*60*3/3,0)) >= (self:GetCoordinate():GetSunset(true) - 30*60)) then
-                        --fin du prochain event apres la nuit aeronavale
-                        self:MessageToMarshal('switching to case III due to Naval Sunset on the next event !', self.customconfig.alias, "", 45, false, 0)
-                        self:SetRecoveryCase(3)
+                    self:SetRecoveryCase(getCaseTypeFromWeather(
+                            self:GetCoordinate(),
+                            timer.getAbsTime() + UTILS.Round(self.customconfig.recoveryops.cyclic.event_duration_minutes*60*1/3, 0),
+                            timer.getAbsTime() + UTILS.Round(self.customconfig.recoveryops.cyclic.event_duration_minutes*60*3/3, 0)
+                    ))
+                    if self.defaultcase == 1 then
+                        self:MessageToMarshal('Good visibility : Case I', self.customconfig.alias, "", 45, false, 0)
+                        self:SetMaxSectionSize(4)
+                    elseif self.defaultcase == 2 then
+                        self:MessageToMarshal('Bad visibility in altitude : Case II', self.customconfig.alias, "", 45, false, 0)
+                        self:SetMaxSectionSize(2)
+                    elseif self.defaultcase == 3 then
+                        self:MessageToMarshal('Bad visibility : Case III', self.customconfig.alias, "", 45, false, 0)
                         self:SetMaxSectionSize(1)
                     else
-                        if ((timer.getAbsTime() + UTILS.Round(self.customconfig.recoveryops.cyclic.event_duration_minutes*60*1/3, 0)) >= (self:GetCoordinate():GetSunrise(true) + 30*60)) then
-                            --debut du prochain recovery apres l aube aeronavale
-                            self:SetRecoveryCase(self.customconfig.recoverycase)
-                            if self.customconfig.recoverycase == 3 then
-                                self:SetMaxSectionSize(1)
-                            else
-                                self:SetMaxSectionSize(4)
-                            end
-                        end
+                        self:SetMaxSectionSize(1)
                     end
                     self:AddRecoveryWindow(
                             UTILS.Round(self.customconfig.recoveryops.cyclic.event_duration_minutes*60*1/3, 0),
@@ -476,19 +537,22 @@ for index, airbossconfig in ipairs(AirBossConfig) do
         AIRBOSSArray[compteur].schedulerID = myschedulerID
         --trigger.action.outText('INFO '..airbossconfig.alias..' : Naval sunset at '..UTILS.SecondsToClock((AIRBOSSArray[compteur]:GetCoordinate():GetSunset(true) - 30*60)), 75)
         if (airbossconfig.recoveryops.mode == 'cyclic') then
-            if ((timer.getAbsTime() + airbossconfig.recoveryops.cyclic.event_duration_minutes*60) >= (AIRBOSSArray[compteur]:GetCoordinate():GetSunset(true) - 30*60)) then
-                AIRBOSSArray[compteur]:MessageToMarshal('switching to case III due to Naval Sunset on the next event !', airbossconfig.alias, "", 45, false, 0)
-                AIRBOSSArray[compteur]:SetRecoveryCase(3)
+            AIRBOSSArray[compteur]:SetRecoveryCase(getCaseTypeFromWeather(
+                    AIRBOSSArray[compteur]:GetCoordinate(),
+                    timer.getAbsTime() + (airbossconfig.recoveryops.cyclic.event_ia_reserved_minutes)*60+UTILS.Round(airbossconfig.recoveryops.cyclic.event_duration_minutes*60*0/3, 0),
+                    timer.getAbsTime() + (airbossconfig.recoveryops.cyclic.event_ia_reserved_minutes)*60+UTILS.Round(airbossconfig.recoveryops.cyclic.event_duration_minutes*60*2/3, 0)
+            ))
+            if AIRBOSSArray[compteur].defaultcase == 1 then
+                AIRBOSSArray[compteur]:MessageToMarshal('Good visibility : Case I', AIRBOSSArray[compteur].customconfig.alias, "", 45, false, 0)
+                AIRBOSSArray[compteur]:SetMaxSectionSize(4)
+            elseif AIRBOSSArray[compteur].defaultcase == 2 then
+                AIRBOSSArray[compteur]:MessageToMarshal('Bad visibility in altitude : Case II', AIRBOSSArray[compteur].customconfig.alias, "", 45, false, 0)
+                AIRBOSSArray[compteur]:SetMaxSectionSize(2)
+            elseif AIRBOSSArray[compteur].defaultcase == 3 then
+                AIRBOSSArray[compteur]:MessageToMarshal('Bad visibility : Case III', AIRBOSSArray[compteur].customconfig.alias, "", 45, false, 0)
                 AIRBOSSArray[compteur]:SetMaxSectionSize(1)
             else
-                if ((timer.getAbsTime() + UTILS.Round(airbossconfig.recoveryops.cyclic.event_duration_minutes*60/3, 0)) >= (AIRBOSSArray[compteur]:GetCoordinate():GetSunrise(true) + 30*60)) then
-                    AIRBOSSArray[compteur]:SetRecoveryCase(airbossconfig.recoverycase)
-                    if airbossconfig.recoverycase == 3 then
-                        AIRBOSSArray[compteur]:SetMaxSectionSize(1)
-                    else
-                        AIRBOSSArray[compteur]:SetMaxSectionSize(4)
-                    end
-                end
+                AIRBOSSArray[compteur]:SetMaxSectionSize(1)
             end
             if airbossconfig.recoveryops.cyclic.event_ia_reserved_minutes then
                 AIRBOSSArray[compteur]:AddRecoveryWindow(
@@ -516,16 +580,19 @@ for index, airbossconfig in ipairs(AirBossConfig) do
                 if (airbossconfig.recoveryops.alpha) then
                     if (airbossconfig.recoveryops.alpha.recoveries) then
                         for alphaindex, alphaevent in ipairs(airbossconfig.recoveryops.alpha.recoveries) do
-                            local effectiveeventcase = airbossconfig.recoverycase or 1
-                            if (alphaevent.recovery_case) then
-                                effectiveeventcase = alphaevent.recovery_case
-                            end
-                            if (env.mission.start_time +
-                                    ( ( alphaevent.recovery_start_minutes +
-                                            alphaevent.recovery_duration_minutes ) * 60
-                                    )
-                                    >= (AIRBOSSArray[compteur]:GetCoordinate():GetSunset(true) - 30*60)) then
-                                effectiveeventcase = 3
+                            local effectiveeventcase = getCaseTypeFromWeather(
+                                    AIRBOSSArray[compteur]:GetCoordinate(),
+                                    timer.getAbsTime() + UTILS.SecondsToClock(env.mission.start_time + (alphaevent.recovery_start_minutes * 60) ),
+                                    timer.getAbsTime() + UTILS.SecondsToClock(env.mission.start_time + (( alphaevent.recovery_start_minutes + alphaevent.recovery_duration_minutes ) * 60))
+                            )
+                            if self.defaultcase == 1 then
+                                self:SetMaxSectionSize(4)
+                            elseif self.defaultcase == 2 then
+                                self:SetMaxSectionSize(2)
+                            elseif self.defaultcase == 3 then
+                                self:SetMaxSectionSize(1)
+                            else
+                                self:SetMaxSectionSize(1)
                             end
                             AIRBOSSArray[compteur]:AddRecoveryWindow(
                                     UTILS.SecondsToClock(env.mission.start_time + (alphaevent.recovery_start_minutes * 60) ),
