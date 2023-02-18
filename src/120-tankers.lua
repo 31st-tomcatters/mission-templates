@@ -20,12 +20,13 @@ for index, tankerconfig in ipairs(TankersConfig) do
                                         :SetRecoveryAirboss(tankerconfig.airboss_recovery)
                                         :SetRadio(tankerconfig.freq)
                                         :SetModex(tankerconfig.modex)
-                                        :SetTACAN(tankerconfig.tacan.channel, tankerconfig.tacan.band, tankerconfig.tacan.morse)
+                                        :SetTACAN(tankerconfig.tacan.channel, tankerconfig.tacan.morse, tankerconfig.tacan.band)
                                         :SetRacetrackDistances(tankerconfig.racetrack.front, tankerconfig.racetrack.back)
         objTanker.customconfig = tankerconfig
         function objTanker:OnAfterStart(from, event, to)
-            objTanker.spawnAbsTime = timer.getAbsTime()
-            env.info('popup Tanker : '..self.tanker.GroupName..' at : '..objTanker.spawnAbsTime)
+            --self:SetTACAN(self.customconfig.tacan.channel, self.customconfig.tacan.morse, self.customconfig.tacan.band )
+            self.spawnAbsTime = timer.getAbsTime()
+            env.info('popup Tanker : '..self.tanker.GroupName..' at : '..self.spawnAbsTime)
             if self.customconfig.escortgroupname then
                 self.escortSpawnObject = SPAWN:NewWithAlias(self.customconfig.escortgroupname,'escort-'.. self.customconfig.groupName)
                                               :InitRepeatOnEngineShutDown()
@@ -179,14 +180,18 @@ function triggerOnDemandTanker(type, askedDuration, askedFL, askedSpeed, askedAn
                 local aliveTankersGroupList = set_group_tanker:GetSetObjects()
 
                 local is_tanker_spawned = false
+                debug_msg(string.format('OnDemandTanker : Looking for a Group corresponding to template %s', string.format("%s-%s", OnDemandTanker.groupName, OnDemandTanker.type)))
                 for index, current_group in ipairs(aliveTankersGroupList) do
                     if (
                             (not(is_tanker_spawned)) and
                                     (string.find(
                                             current_group.GroupName,
-                                            string.format("%s-%s",OnDemandTanker.groupName, OnDemandTanker.type)
+                                            string.format("%s-%s",OnDemandTanker.groupName, OnDemandTanker.type),
+                                            1,
+                                            true
                                     ) ~= nil)
                     ) then
+                        debug_msg(string.format('OnDemandTanker Found %s corresponding to template %s', current_group.GroupName, string.format("%s-%s", OnDemandTanker.groupName, OnDemandTanker.type)))
                         is_tanker_spawned = true
                         TankerGroup = current_group
                     end
@@ -301,6 +306,7 @@ function triggerOnDemandTanker(type, askedDuration, askedFL, askedSpeed, askedAn
                                 )
                         )
                     end
+                    TankerGroup.customconfig = OnDemandTanker
                     TankerGroup.spawnAbsTime = timer.getAbsTime()
                     TankerGroup.missionmaxduration = askedDuration
                     table.insert(TankerRoute,
@@ -373,36 +379,101 @@ function triggerOnDemandTanker(type, askedDuration, askedFL, askedSpeed, askedAn
                 if (OnDemandTanker.callsign) then
                     TankerGroup:CommandSetCallsign(OnDemandTanker.callsign.name, OnDemandTanker.callsign.number, 2)
                 end
+                if OnDemandTanker.escortgroupname then
+                    TankerGroup.escortSpawnObject = SPAWN:NewWithAlias(OnDemandTanker.escortgroupname,'escort-'.. OnDemandTanker.groupName)
+                                                        :InitRepeatOnEngineShutDown()
+                                                        :InitSkill("Excellent")
+                                                        :OnSpawnGroup(function(SpawnGroup)
+                        taskGroupEscort({TankerGroup, SpawnGroup})
+                    end)
+                    TankerGroup.escortGroupObject = spawnRecoveryTankerEscort(TankerGroup.escortSpawnObject,OnDemandTanker)
+                    if OnDemandTanker.missionmaxduration then
+                        TankerGroup.escortGroupObject:ScheduleOnce(OnDemandTanker.missionmaxduration*60,
+                                function(SpawnGroup, airBaseName)
+                                    --trigger.action.outText('RTB schedule trigger Tanker-escort group : '..(SpawnGroup.GroupName)..' airbase'..(airBaseName)..'...', 45)
+                                    SpawnGroup:RouteRTB(AIRBASE:FindByName(airBaseName))
+                                end,
+                                TankerGroup.escortGroupObject,
+                                OnDemandTanker.baseUnit
+                        )
+                        --trigger.action.outText('Tanker-escort configured to RTB in  : '..(OnDemandTanker.missionmaxduration)..' minutes max...', 45)
+                    end
+                end
                 if (map_marker[TankerGroup:GetName()]) then
                     COORDINATE:RemoveMark(map_marker[TankerGroup:GetName()])
                 end
-                map_marker[TankerGroup:GetName()] = askedAnchorCoord:MarkToCoalition(
-                        string.format(
-                                'OnDemand Tanker %s - TCN %i\nFL %i at %i knots\nFreq %.2f MHz\nOn station for %i minutes\nRacetrack : %i ° for %i nm',
-                                OnDemandTanker.type,
-                                OnDemandTanker.tacan.channel,
-                                UTILS.Round(OnDemandTanker.altitude / 100 , 0),
-                                OnDemandTanker.speed,
-                                OnDemandTanker.freq,
-                                askedDuration,
-                                OnDemandTanker.orbit.heading,
-                                OnDemandTanker.orbit.length
-                        ),
-                        OnDemandTanker.benefit_coalition,
-                        true,
-                        'OnDemand Tanker %s is Activated'
-                )
+                if(OnDemandTanker.tacan) then
+                    map_marker[TankerGroup:GetName()] = askedAnchorCoord:MarkToCoalition(
+                            string.format(
+                                    'OnDemand Tanker %s - TCN %i\nFL %i at %i knots\nFreq %.2f MHz\nOn station for %i minutes\nRacetrack : %i ° for %i nm',
+                                    OnDemandTanker.type,
+                                    OnDemandTanker.tacan.channel,
+                                    UTILS.Round(OnDemandTanker.altitude / 100 , 0),
+                                    OnDemandTanker.speed,
+                                    OnDemandTanker.freq,
+                                    askedDuration,
+                                    OnDemandTanker.orbit.heading,
+                                    OnDemandTanker.orbit.length
+                            ),
+                            OnDemandTanker.benefit_coalition,
+                            true,
+                            'OnDemand Tanker %s is Activated'
+                    )
+                else
+                    map_marker[TankerGroup:GetName()] = askedAnchorCoord:MarkToCoalition(
+                            string.format(
+                                    'OnDemand Tanker %s\nFL %i at %i knots\nFreq %.2f MHz\nOn station for %i minutes\nRacetrack : %i ° for %i nm',
+                                    OnDemandTanker.type,
+                                    UTILS.Round(OnDemandTanker.altitude / 100 , 0),
+                                    OnDemandTanker.speed,
+                                    OnDemandTanker.freq,
+                                    askedDuration,
+                                    OnDemandTanker.orbit.heading,
+                                    OnDemandTanker.orbit.length
+                            ),
+                            OnDemandTanker.benefit_coalition,
+                            true,
+                            'OnDemand Tanker %s is Activated'
+                    )
+                end
                 TankerGroup:HandleEvent(EVENTS.Land)
                 TankerGroup:HandleEvent(EVENTS.Crash)
                 TankerGroup:HandleEvent(EVENTS.Dead)
                 function TankerGroup:OnEventLand(EventData)
                     COORDINATE:RemoveMark(map_marker[self:GetName()])
+                    if self.custommconfig.escortgroupname then
+                        env.info('Tanker RTB: '..self.GroupName..'...')
+                        if self.escortGroupObject:IsAirborne(false) == true then
+                            env.info('escort RTB : '.. self.escortGroupObject.GroupName..' Tanker : '..self.GroupName..'...')
+                            self.escortGroupObject:RouteRTB()
+                        else
+                            --self.escortGroupObject:Destroy(nil, 5)
+                        end
+                    end
                 end
                 function TankerGroup:OnEventCrash(EventData)
                     COORDINATE:RemoveMark(map_marker[self:GetName()])
+                    if self.custommconfig.escortgroupname then
+                        env.info('Tanker RTB: '..self.GroupName..'...')
+                        if self.escortGroupObject:IsAirborne(false) == true then
+                            env.info('escort RTB : '.. self.escortGroupObject.GroupName..' Tanker : '..self.GroupName..'...')
+                            self.escortGroupObject:RouteRTB()
+                        else
+                            --self.escortGroupObject:Destroy(nil, 5)
+                        end
+                    end
                 end
                 function TankerGroup:OnEventDead(EventData)
                     COORDINATE:RemoveMark(map_marker[self:GetName()])
+                    if self.custommconfig.escortgroupname then
+                        env.info('Tanker RTB: '..self.GroupName..'...')
+                        if self.escortGroupObject:IsAirborne(false) == true then
+                            env.info('escort RTB : '.. self.escortGroupObject.GroupName..' Tanker : '..self.GroupName..'...')
+                            self.escortGroupObject:RouteRTB()
+                        else
+                            --self.escortGroupObject:Destroy(nil, 5)
+                        end
+                    end
                 end
             end
         end
@@ -412,10 +483,10 @@ end
 
 --local RestrToCoal = nil
 tankersOnDemandArray = {}
-local MarkHandler = {}
+local TankerMarkHandler = {}
 local CmdSymbol = "-"
 
-function MarkHandler:onEvent(event)
+function TankerMarkHandler:onEvent(event)
 
     if event.id == 25 then
         --trigger.action.outText(" ", 0, true)
@@ -515,4 +586,4 @@ function MarkHandler:onEvent(event)
 
 end
 
-world.addEventHandler(MarkHandler)
+world.addEventHandler(TankerMarkHandler)

@@ -66,7 +66,7 @@ function interceptDetection(param)
             objIntercept.bubbleInvaded = true
             debug_msg(string.format("Intercept: %s has been intercepted", objIntercept.interceptTarget:GetName()))
             if (objIntercept.knowIsIntercepted == false) then
-                if (math.random(1,100) > 0) then
+                if (math.random(1,100) >= 75) then
                     local delay = math.random(15,120)
                     debug_msg(string.format("Intercept: %s has detected it has been intercepted : he will react accordingly in %i seconds !", objIntercept.interceptTarget:GetName(), delay))
                     objIntercept.knowIsIntercepted = true

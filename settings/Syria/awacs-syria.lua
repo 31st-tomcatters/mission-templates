@@ -29,10 +29,13 @@ AwacsConfig = {
             number = 1
         }
     },
+}
+
+OnDemandAwacsConfig = {
+    --Darkstar 1 = E3
     {
         enable = true,
-        autorespawn = true,
-        patternUnit = 'sea-anchor-1-1',
+        type = "ds1",
         benefit_coalition = coalition.side.BLUE,
         baseUnit = AIRBASE.Syria.Incirlik,
         terminalType = AIRBASE.TerminalType.OpenBig,
@@ -44,15 +47,40 @@ AwacsConfig = {
         speed = 402,
         freq = 265.8,
         fuelwarninglevel=25,
-        racetrack = {
-            front = 55,
-            back = 0
-        },
         modex = 11,
         callsign = {
             alias = 'Darkstar',
             name = CALLSIGN.AWACS.Darkstar,
             number = 1
-        }
-    }
+        },
+        orbit = {
+            length = 55,
+            heading = 20
+        },
+    },
+    --Overlord 1 = E3
+    {
+        enable = true,
+        type = "ov1",
+        benefit_coalition = coalition.side.RED,
+        baseUnit = AIRBASE.Syria.Marj_Ruhayyil,
+        terminalType = AIRBASE.TerminalType.OpenBig,
+        groupName = 'LCD-03 AWACS RED',
+        airboss_recovery = false,
+        missionmaxduration = 120,
+        altitude = 38000,
+        speed = 402,
+        freq = 251,
+        fuelwarninglevel=25,
+        modex = 15,
+        callsign = {
+            alias = 'OverLord',
+            name = CALLSIGN.AWACS.Overlord,
+            number = 1
+        },
+        orbit = {
+            length = 30,
+            heading = 45
+        },
+    },
 }

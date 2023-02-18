@@ -35,7 +35,6 @@ AirBossConfig = {
         },
         infinitepatrol = true,
         controlarea = 65,
-        recoverycase = 1,
         maxpatterns = 5,
         maxstacks = 8,
         difficulty = AIRBOSS.Difficulty.NORMAL,
@@ -78,27 +77,22 @@ AirBossConfig = {
                     {
                         recovery_start_minutes = 15,
                         recovery_duration_minutes = 60,
-                        recovery_case = 1
                     },
                     {
                         recovery_start_minutes = 105,
                         recovery_duration_minutes = 60,
-                        recovery_case = 1
                     },
                     {
                         recovery_start_minutes = 195,
                         recovery_duration_minutes = 60,
-                        recovery_case = 1
                     },
                     {
                         recovery_start_minutes = 195+90,
                         recovery_duration_minutes = 60,
-                        recovery_case = 1
                     },
                     {
                         recovery_start_minutes = 195+180,
                         recovery_duration_minutes = 60,
-                        recovery_case = 1
                     }
                 }
             }
@@ -122,7 +116,6 @@ AirBossConfig = {
         },
         infinitepatrol = true,
         controlarea = 65,
-        recoverycase = 1,
         maxpatterns = 5,
         maxstacks = 8,
         difficulty = AIRBOSS.Difficulty.NORMAL,

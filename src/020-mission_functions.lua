@@ -232,8 +232,8 @@ function taskTankerEscort(param)
     EscortGroup:OptionRTBBingoFuel(true)
     local randomCoord = EscortGroup
             :GetCoordinate()
-            :GetRandomCoordinateInRadius( UTILS.NMToMeters(30), UTILS.NMToMeters(20) )
-    randomCoord.y = 8000
+            :GetRandomCoordinateInRadius( UTILS.NMToMeters(20), UTILS.NMToMeters(15) )
+    randomCoord.y = UTILS.FeetToMeters(15000)
     --randomCoord:MarkToAll('rejointe '..EscortGroup.GroupName)
     EscortGroup:Route(
             {
@@ -243,7 +243,7 @@ function taskTankerEscort(param)
                         {},
                         'rejoin'
                 ),
-                randomCoord:GetRandomCoordinateInRadius( UTILS.NMToMeters(15), UTILS.NMToMeters(10) ):WaypointAirTurningPoint(
+                randomCoord:GetRandomCoordinateInRadius( UTILS.NMToMeters(20), UTILS.NMToMeters(15) ):WaypointAirTurningPoint(
                         COORDINATE.WaypointAltType.BARO,
                         500,
                         {
@@ -260,6 +260,46 @@ function taskTankerEscort(param)
             }
     )
     env.info('Escort group spawned : '.. EscortGroup.GroupName..'. Escorting '..recoveryTankerObject.tanker.GroupName)
+end
+
+function taskGroupEscort(param)
+    local GroupToEscortObject = param[1]
+    local EscortingGroup = param[2]
+    EscortingGroup:OptionAlarmStateRed()
+    EscortingGroup:OptionROEReturnFire()
+    --EscortGroup:TraceOn()
+    EscortingGroup:OptionRTBAmmo(true)
+    EscortingGroup:OptionRTBBingoFuel(true)
+    local randomCoord = EscortingGroup
+            :GetCoordinate()
+            :GetRandomCoordinateInRadius( UTILS.NMToMeters(20), UTILS.NMToMeters(15) )
+    randomCoord.y = UTILS.FeetToMeters(15000)
+    --randomCoord:MarkToAll('rejointe '..EscortGroup.GroupName)
+    EscortingGroup:Route(
+            {
+                randomCoord:WaypointAirTurningPoint(
+                        COORDINATE.WaypointAltType.BARO,
+                        500,
+                        {},
+                        'rejoin'
+                ),
+                randomCoord:GetRandomCoordinateInRadius( UTILS.NMToMeters(20), UTILS.NMToMeters(15) ):WaypointAirTurningPoint(
+                        COORDINATE.WaypointAltType.BARO,
+                        500,
+                        {
+                            EscortingGroup:TaskEscort(
+                                    GROUP:FindByName(GroupToEscortObject.GroupName),
+                                    POINT_VEC3:New(0, 10, 150):GetVec3(),
+                                    20,
+                                    UTILS.NMToMeters(40),
+                                    { 'Air' }
+                            )
+                        },
+                        'escort-start'
+                )
+            }
+    )
+    env.info('Escort group spawned : '.. EscortingGroup.GroupName..'. Escorting '.. GroupToEscortObject.GroupName)
 end
 
 function spawnRecoveryTankerEscort(escortSpawnObject,customconfig)
@@ -316,6 +356,35 @@ function destroyGroup(group_name)
             end )
 end
 
+function destroyStatic(staticToDelete, subRangeName, index)
+    if (staticToDelete.name ~= nil) then
+        local staticNameToDelete = string.format("%s", staticToDelete.name)
+        if (subRangeName ~= nil and index ~= nil) then
+            staticNameToDelete = string.format("%s_%s_%i", subRangeName, staticToDelete.name, index)
+        end
+        local staticUnitToDelete = STATIC:FindByName(staticNameToDelete, false)
+        if (staticUnitToDelete ~= nil) then
+            debug_msg(string.format("Delete static %s", staticUnitToDelete:GetDCSObject():getName()))
+            staticUnitToDelete:Destroy()
+        end
+    elseif (staticToDelete.type ~= nil and staticToDelete.category ~= nil and index ~= nil) then
+        local staticNameToDelete = string.format("%s_%s_%i", subRangeName, staticToDelete.type, index)
+        local staticUnitToDelete = STATIC:FindByName(staticNameToDelete, false)
+        if (staticUnitToDelete ~= nil) then
+            debug_msg(string.format("Delete Static %s", staticUnitToDelete:GetDCSObject():getName()))
+            staticUnitToDelete:Destroy()
+        end
+    else
+        debug_msg(string.format("Static to delete has no name or type!"))
+    end
+end
+
+function destroyStatics(staticsToDelete, subRangeName)
+    for index, staticToDelete in ipairs(staticsToDelete) do
+        destroyStatic(staticToDelete, subRangeName, index)
+    end
+end
+
 function deleteSubRangeUnits(param)
     --parameters :
     --           1 : groups to be destroyed
@@ -331,6 +400,15 @@ function deleteSubRangeUnits(param)
     for i = 1, #groupsToSpawn do
         destroyGroup(groupsToSpawn[i])
     end
+
+    local subRangeName = subRangeConfig.name
+    local staticsToDelete = subRangeConfig.staticsToSpawn
+    if (staticsToDelete ~= nil)then
+        destroyStatics(staticsToDelete, subRangeName)
+    else
+        debug_msg(string.format("No static in %s", subRangeName))
+    end
+
     MESSAGE:NewType(string.format("Remove the site : %s-%s", rangeConfig.name, subRangeConfig.name),
             MESSAGE.Type.Information):ToBlue()
     if (not(blnMute)) then
@@ -634,13 +712,13 @@ function SpawnRangesDelay(param)
         message_warning = param[7]
     end
     if ( sound_warning ) then
-    sound2Bip:ToAll()
+        sound2Bip:ToAll()
     end
     if ( message_warning ) then
-    MESSAGE:NewType(string.format("Warning, Range Units %s(%s) will spawn in %d sec", rangeConfig.name, subRangeConfig.name, delay), MESSAGE.Type.Update):ToAll()
+        MESSAGE:NewType(string.format("Warning, Range Units %s(%s) will spawn in %d sec", rangeConfig.name, subRangeConfig.name, delay), MESSAGE.Type.Update):ToAll()
     end
     TIMER:New(SpawnRanges, param):Start(delay)
-    end
+end
 
 function SpawnWholeRangesDelay(param)
     --parameters :
@@ -736,6 +814,54 @@ function SpawnRanges(param)
     local redAlert = subRangeConfig.redAlert
 
     debug_msg(string.format("SpawnRanges : Range %s - Targets %s", rangeName, subRangeName))
+    if (staticsToSpawn ~= nil)then
+        for index, staticToSpawn in ipairs(staticsToSpawn) do
+            local spawnStatic = nil
+            if (staticToSpawn.name ~= nil) then
+                local staticNameToSpawn = string.format("%s", staticToSpawn.name)
+                spawnStatic = SPAWNSTATIC:NewFromStatic(staticNameToSpawn)
+                if (staticToSpawn.coalition ~= nil) then
+                    if (staticToSpawn.coalition == coalition.side.BLUE) then
+                        spawnStatic = SPAWNSTATIC:NewFromStatic(staticNameToSpawn, country.id.CJTF_BLUE)
+                    elseif (staticToSpawn.coalition == coalition.side.RED) then
+                        spawnStatic = SPAWNSTATIC:NewFromStatic(staticNameToSpawn, country.id.CJTF_RED)
+                    else
+                        spawnStatic = SPAWNSTATIC:NewFromStatic(staticNameToSpawn, country.id.UN_PEACEKEEPERS)
+                    end
+                end
+                local x = staticToSpawn.x
+                local y = staticToSpawn.y
+                local heading = staticToSpawn.heading
+                local name = string.format("%s_%s_%i", subRangeName, staticNameToSpawn,index)
+                local static = spawnStatic:SpawnFromPointVec2( POINT_VEC2:New( x, y ), heading, name )
+                debug_msg(string.format("Static to spawn %s at %i,%i -> %s", static:GetDCSObject():getTypeName(), x, y, static:GetDCSObject():getName()))
+            elseif (staticToSpawn.type ~= nil and staticToSpawn.category ~= nil) then
+                local staticTypeToSpawn = string.format("%s", staticToSpawn.type)
+                local staticCategoryToSpawn = string.format("%s", staticToSpawn.category)
+                spawnStatic = SPAWNSTATIC:NewFromType(staticTypeToSpawn, staticCategoryToSpawn)
+                if (staticToSpawn.coalition ~= nil) then
+                    if (staticToSpawn.coalition == coalition.side.BLUE) then
+                        spawnStatic = SPAWNSTATIC:NewFromType(staticTypeToSpawn, staticCategoryToSpawn, country.id.CJTF_BLUE)
+                    elseif (staticToSpawn.coalition == coalition.side.RED) then
+                        spawnStatic = SPAWNSTATIC:NewFromType(staticTypeToSpawn, staticCategoryToSpawn, country.id.CJTF_RED)
+                    else
+                        spawnStatic = SPAWNSTATIC:NewFromType(staticTypeToSpawn, staticCategoryToSpawn, country.id.UN_PEACEKEEPERS)
+                    end
+                end
+                local x = staticToSpawn.x
+                local y = staticToSpawn.y
+                local heading = staticToSpawn.heading
+                local name = string.format("%s_%s_%i", subRangeName, staticTypeToSpawn, index)
+                local static = spawnStatic:SpawnFromPointVec2( POINT_VEC2:New( x, y ), heading, name )
+                debug_msg(string.format("Static type to spawn %s at %i,%i -> %s", static:GetDCSObject():getTypeName(), x, y, static:GetDCSObject():getName()))
+            else
+                debug_msg(string.format("Static to spawn has no name or type!"))
+            end
+        end
+    else
+        debug_msg(string.format("No static in %s", subRangeName))
+    end
+
     for i = 1, #groupsToSpawn do
         local groupNameToSpawn = string.format("%s", groupsToSpawn[i])
         if (GROUP:FindByName(groupNameToSpawn) ~= nil) then
@@ -775,22 +901,6 @@ function SpawnRanges(param)
             debug_msg(string.format("GROUP to spawn %s not found in mission", groupNameToSpawn))
         end
     end
-
-    if (staticsToSpawn ~= nil)then
-        for index, staticToSpawn in ipairs(staticsToSpawn) do
-            local staticNameToSpawn = string.format("%s", staticToSpawn.name)
-            local spawnStatic = SPAWNSTATIC:NewFromStatic(staticNameToSpawn)
-            local x = staticToSpawn.x
-            local y = staticToSpawn.y
-            local heading = staticToSpawn.heading
-            local name = string.format("%s_%s_%i", subRangeName, staticNameToSpawn,index)
-            debug_msg(string.format("Static to spawn %s at %i,%i -> %s", staticNameToSpawn, x, y, name))
-            spawnStatic:SpawnFromPointVec2( POINT_VEC2:New( x, y ), heading, name )
-        end
-    else
-        debug_msg(string.format("No static in %s", subRangeName))
-    end
-
 
     radioCommandSubRange:RemoveSubMenus()
     local CommandZoneDetroy = MENU_COALITION_COMMAND:New(rangeConfig.benefit_coalition, "Delete", radioCommandSubRange,

@@ -255,9 +255,9 @@ for index, airbossconfig in ipairs(AirBossConfig) do
             if airbossconfig.voices.marshall == "Raynor" then
                 objAirboss:SetVoiceOversMarshalByRaynor(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack Marshal Raynor/')
             elseif airbossconfig.voices.marshall == "Gabriella" then
-                objAirboss:SetVoiceOversMarshalByGabriella(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack Marshal Gabriella/')
+                    objAirboss:SetVoiceOversMarshalByGabriella(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack Marshal Gabriella/')
             elseif airbossconfig.voices.marshall == "FF" then
-                objAirboss:SetVoiceOversMarshalByFF(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack Marshal FF/')
+                    objAirboss:SetVoiceOversMarshalByFF(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack Marshal FF/')
             end
         else
             objAirboss:SetVoiceOversMarshalByRaynor(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack Marshal Raynor/')
@@ -266,7 +266,7 @@ for index, airbossconfig in ipairs(AirBossConfig) do
             if airbossconfig.voices.lso == "Raynor" then
                 objAirboss:SetVoiceOversLSOByRaynor(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack LSO Raynor/')
             elseif airbossconfig.voices.lso == "FF" then
-                objAirboss:SetVoiceOversLSOByFF(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack LSO FF/')
+                    objAirboss:SetVoiceOversLSOByFF(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack LSO FF/')
             end
         else
             objAirboss:SetVoiceOversLSOByRaynor(soundFilesPrefix .. 'AIRBOSS/Airboss Soundpack LSO Raynor/')
@@ -582,17 +582,17 @@ for index, airbossconfig in ipairs(AirBossConfig) do
                         for alphaindex, alphaevent in ipairs(airbossconfig.recoveryops.alpha.recoveries) do
                             local effectiveeventcase = getCaseTypeFromWeather(
                                     AIRBOSSArray[compteur]:GetCoordinate(),
-                                    timer.getAbsTime() + UTILS.SecondsToClock(env.mission.start_time + (alphaevent.recovery_start_minutes * 60) ),
-                                    timer.getAbsTime() + UTILS.SecondsToClock(env.mission.start_time + (( alphaevent.recovery_start_minutes + alphaevent.recovery_duration_minutes ) * 60))
+                                    UTILS.Round(env.mission.start_time + (alphaevent.recovery_start_minutes * 60) ,0),
+                                    UTILS.Round(env.mission.start_time + (( alphaevent.recovery_start_minutes + alphaevent.recovery_duration_minutes ) * 60),0)
                             )
-                            if self.defaultcase == 1 then
-                                self:SetMaxSectionSize(4)
-                            elseif self.defaultcase == 2 then
-                                self:SetMaxSectionSize(2)
-                            elseif self.defaultcase == 3 then
-                                self:SetMaxSectionSize(1)
+                            if AIRBOSSArray[compteur].defaultcase == 1 then
+                                AIRBOSSArray[compteur]:SetMaxSectionSize(4)
+                            elseif AIRBOSSArray[compteur].defaultcase == 2 then
+                                AIRBOSSArray[compteur]:SetMaxSectionSize(2)
+                            elseif AIRBOSSArray[compteur].defaultcase == 3 then
+                                AIRBOSSArray[compteur]:SetMaxSectionSize(1)
                             else
-                                self:SetMaxSectionSize(1)
+                                AIRBOSSArray[compteur]:SetMaxSectionSize(1)
                             end
                             AIRBOSSArray[compteur]:AddRecoveryWindow(
                                     UTILS.SecondsToClock(env.mission.start_time + (alphaevent.recovery_start_minutes * 60) ),

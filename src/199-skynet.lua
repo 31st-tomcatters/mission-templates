@@ -106,6 +106,34 @@ function SpawnIADSUnits(param)
     end
 
     for nodeIndex, nodeConfig in ipairs(nodesConfig) do
+        local connection = nodeConfig.connection
+        if (type(connection) == "table") then
+            if ( connection.type ~= nil and connection.category ~= nil and connection.name ~= nil ) then
+                local staticTypeToSpawn = string.format("%s", connection.type)
+                local staticCategoryToSpawn = string.format("%s", connection.category)
+                local spawnStatic = SPAWNSTATIC:NewFromType(staticTypeToSpawn, staticCategoryToSpawn)
+                if (connection.coalition ~= nil) then
+                    if (connection.coalition == coalition.side.BLUE) then
+                        spawnStatic = SPAWNSTATIC:NewFromType(staticTypeToSpawn, staticCategoryToSpawn,
+                            country.id.CJTF_BLUE)
+                    elseif (connection.coalition == coalition.side.RED) then
+                        spawnStatic = SPAWNSTATIC:NewFromType(staticTypeToSpawn, staticCategoryToSpawn,
+                            country.id.CJTF_RED)
+                    else
+                        spawnStatic = SPAWNSTATIC:NewFromType(staticTypeToSpawn, staticCategoryToSpawn,
+                            country.id.UN_PEACEKEEPERS)
+                    end
+                end
+                local x = connection.x
+                local y = connection.y
+                local heading = connection.heading
+                local name = string.format("%s", connection.name)
+                debug_msg(string.format("Static type to spawn %s at %i,%i -> %s", staticTypeToSpawn, x, y, name))
+                local static = spawnStatic:SpawnFromPointVec2(POINT_VEC2:New(x, y), heading, name)
+            else
+                debug_msg(string.format("Static to spawn has no type, category, name or position!"))
+            end
+        end
         local ewrList = nodeConfig.ewrs
         local siteList = nodeConfig.sites[difficulty]
         for ewrIndex, ewrGroup in ipairs(ewrList) do
@@ -136,6 +164,52 @@ function SpawnIADSUnits(param)
                 end
             elseif (type(site) == "table") then
                 debug_msg(string.format("IADS - SAM in config file is table"))
+                if (site.staticsToSpawn ~= nil) then
+                    for index, staticToSpawn in ipairs(site.staticsToSpawn) do
+                        local spawnStatic = nil
+                        if (staticToSpawn.name ~= nil) then
+                            local staticNameToSpawn = string.format("%s", staticToSpawn.name)
+                            spawnStatic = SPAWNSTATIC:NewFromStatic(staticNameToSpawn)
+                            if (staticToSpawn.coalition ~= nil) then
+                                if (staticToSpawn.coalition == coalition.side.BLUE) then
+                                    spawnStatic = SPAWNSTATIC:NewFromStatic(staticNameToSpawn, country.id.CJTF_BLUE)
+                                elseif (staticToSpawn.coalition == coalition.side.RED) then
+                                    spawnStatic = SPAWNSTATIC:NewFromStatic(staticNameToSpawn, country.id.CJTF_RED)
+                                else
+                                    spawnStatic = SPAWNSTATIC:NewFromStatic(staticNameToSpawn, country.id.UN_PEACEKEEPERS)
+                                end
+                            end
+                            local x = staticToSpawn.x
+                            local y = staticToSpawn.y
+                            local heading = staticToSpawn.heading
+                            local name = string.format("%s_%s_%i", site.sam, staticNameToSpawn,index)
+                            local static = spawnStatic:SpawnFromPointVec2( POINT_VEC2:New( x, y ), heading, name )
+                            debug_msg(string.format("IADS - Static %s to spawn at %i,%i -> %s", static:GetDCSObject():getTypeName(), x, y, static:GetDCSObject():getName()))
+                        elseif (staticToSpawn.type ~= nil and staticToSpawn.category ~= nil) then
+                            local staticTypeToSpawn = string.format("%s", staticToSpawn.type)
+                            local staticCategoryToSpawn = string.format("%s", staticToSpawn.category)
+                            spawnStatic = SPAWNSTATIC:NewFromType(staticTypeToSpawn, staticCategoryToSpawn)
+                            if (staticToSpawn.coalition ~= nil) then
+                                if (staticToSpawn.coalition == coalition.side.BLUE) then
+                                    spawnStatic = SPAWNSTATIC:NewFromType(staticTypeToSpawn, staticCategoryToSpawn, country.id.CJTF_BLUE)
+                                elseif (staticToSpawn.coalition == coalition.side.RED) then
+                                    spawnStatic = SPAWNSTATIC:NewFromType(staticTypeToSpawn, staticCategoryToSpawn, country.id.CJTF_RED)
+                                else
+                                    spawnStatic = SPAWNSTATIC:NewFromType(staticTypeToSpawn, staticCategoryToSpawn, country.id.UN_PEACEKEEPERS)
+                                end
+                            end
+                            local x = staticToSpawn.x
+                            local y = staticToSpawn.y
+                            local heading = staticToSpawn.heading
+                            local name = string.format("%s_%s_%i", site.sam, staticTypeToSpawn, index)
+                            local static = spawnStatic:SpawnFromPointVec2( POINT_VEC2:New( x, y ), heading, name )
+                            debug_msg(string.format("IADS - Static %s to spawn at %i,%i -> %s", static:GetDCSObject():getTypeName(), x, y, static:GetDCSObject():getName()))
+                        else
+                            debug_msg(string.format("IADS - Static to spawn has no name or type!"))
+                        end
+                    end
+                end
+
                 local groupNameToSpawn = string.format("%s", site.sam)
                 if (GROUP:FindByName(groupNameToSpawn) ~= nil) then
                     local spawnGroup = SPAWN:New(groupNameToSpawn)
@@ -252,7 +326,11 @@ function activateGCI(param)
     Detection = DETECTION_AREAS:New( DetectionSetGroup, 30000 )
     A2ADispatcher = AI_A2A_DISPATCHER:New( Detection )
     A2ADispatcher:SetEngageRadius() -- 100000 is the default value.
-    A2ADispatcher:SetGciRadius(100000)
+    if (iadsConfig.gci_engage_radius) then
+        A2ADispatcher:SetGciRadius(iadsConfig.gci_engage_radius)
+    else
+        A2ADispatcher:SetGciRadius()
+    end
     CCCPBorderZone = ZONE_POLYGON:New( iadsConfig.gci_border , GROUP:FindByName( iadsConfig.gci_border ) )
     A2ADispatcher:SetBorderZone( CCCPBorderZone )
 
@@ -265,6 +343,7 @@ function activateGCI(param)
         A2ADispatcher:SetSquadron( gci_group_name,    gci_group.airport, gci_group.templatePrefixes, gci_group.numberOfAircraftAvailable )
         A2ADispatcher:SetSquadronGci( gci_group_name, 1000, 3000 )
     end
+    MESSAGE:NewType(string.format("IADS - GCI of %s is activated", iadsConfig.name), MESSAGE.Type.Information):ToCoalition(iadsConfig.benefit_coalition)
 end
 
 function activateSkynet(param)
@@ -301,8 +380,14 @@ function activateSkynet(param)
     end
 
     for index, node in ipairs(iadsConfig.nodes) do
-        debug_msg(string.format("IADS - Connection Node %s", node.connection))
-        local connectionNode = StaticObject.getByName(node.connection)
+        local connectionName = ""
+        if (type(node.connection) == "string") then
+            connectionName = node.connection
+        else
+            connectionName = node.connection.name
+        end
+        debug_msg(string.format("IADS - Connection Node %s", connectionName))
+        local connectionNode = StaticObject.getByName(connectionName)
         for index, ewr in ipairs(node.ewrs) do
             if (ewr ~= nil and connectionNode ~= nil) then
                 debug_msg(string.format("IADS - EWR Unit name in config file : %s", ewr))
@@ -325,19 +410,19 @@ function activateSkynet(param)
                             local set_group_alive = SET_GROUP:New():FilterPrefixes(site):FilterOnce()
                             set_group_alive:ForEachGroupAlive(function(group_alive)
                                 debug_msg(string.format("IADS - Alive Sam Group found %s", group_alive:GetName()))
-                                attachSAMSiteToSkynet(site, group_alive:GetName(), IADSObjectIndex, node.connection)
+                                attachSAMSiteToSkynet(site, group_alive:GetName(), IADSObjectIndex, connectionName)
                             end)
                         elseif (type(site) == "table") then
                             debug_msg(string.format("IADS - Sam Group name in config file :  %s", site.sam))
                             local set_group_alive = SET_GROUP:New():FilterPrefixes(site.sam):FilterOnce()
                             set_group_alive:ForEachGroupAlive(function(samGroupAlive)
                                 debug_msg(string.format("IADS - Alive Sam Group found %s", samGroupAlive:GetName()))
-                                attachSAMSiteToSkynet(site, samGroupAlive:GetName(), IADSObjectIndex, node.connection)
+                                attachSAMSiteToSkynet(site, samGroupAlive:GetName(), IADSObjectIndex, connectionName)
                                 if (type(site.pointDefenses) == "string") then
                                     local set_pdgroup_alive = SET_GROUP:New():FilterPrefixes(site.pointDefenses):FilterOnce()
                                     set_pdgroup_alive:ForEachGroupAlive(function(pdGroupAlive)
                                         debug_msg(string.format("IADS - Alive Point Defense Sam Group found %s", pdGroupAlive:GetName()))
-                                        attachPdSiteToSkynet(site,pdGroupAlive:GetName(), samGroupAlive:GetName(), IADSObjectIndex, node.connection)
+                                        attachPdSiteToSkynet(site,pdGroupAlive:GetName(), samGroupAlive:GetName(), IADSObjectIndex, connectionName)
                                     end)
                                 elseif (type(site.pointDefenses) == "table") then
                                     for pdIndex, pdSamGroupName in ipairs(site.pointDefenses) do
@@ -345,7 +430,7 @@ function activateSkynet(param)
                                         local set_pdgroup_alive = SET_GROUP:New():FilterPrefixes(pdSamGroupName):FilterOnce()
                                         set_pdgroup_alive:ForEachGroupAlive(function(pdGroupAlive)
                                             debug_msg(string.format("IADS - Alive Point Defense Sam Group found %s", pdGroupAlive:GetName()))
-                                            attachPdSiteToSkynet(site,pdGroupAlive:GetName(), samGroupAlive:GetName(), IADSObjectIndex, node.connection)
+                                            attachPdSiteToSkynet(site,pdGroupAlive:GetName(), samGroupAlive:GetName(), IADSObjectIndex, connectionName)
                                         end)
                                     end
                                 end
@@ -387,6 +472,8 @@ function deleteIADSUnits(param)
     end
 
     for index, nodeConfig in ipairs(nodesConfig) do
+        local connection = nodeConfig.connection
+            destroyStatic(connection)
         local ewrList = nodeConfig.ewrs
         if (difficultiesAlreadySpawned <= 1) then
             for index, ewrGroup in ipairs(ewrList) do
@@ -402,6 +489,9 @@ function deleteIADSUnits(param)
             elseif (type(site) == "table") then
                 local groupNameToDelete = string.format("%s", site.sam)
                 destroyGroup(groupNameToDelete)
+            end
+            if (type( site.staticsToSpawn) == "table") then
+                destroyStatics(site.staticsToSpawn, site.sam)
             end
             if (type(site.pointDefenses) == "string") then
                 local groupNameToDelete = string.format("%s", site.pointDefenses)
@@ -513,7 +603,13 @@ function manageIADSNetworkMenu(networkRootMenu, iadsconfig, IADSObjectIndex)
                         isThereSomethingToSpawn = true
                     end
                 end
-                debug_msg(string.format('IADS - network=%s node=%s difficulty=%s sites number=%d', iadsconfig.name, nodeconfig.connection, difficulty, difficultySiteNumberToSpawn))
+                if (type(nodeconfig.connection) == "string") then
+                    debug_msg(string.format('IADS - network=%s node=%s difficulty=%s sites number=%d', iadsconfig.name,
+                        nodeconfig.connection, difficulty, difficultySiteNumberToSpawn))
+                else
+                    debug_msg(string.format('IADS - network=%s node=%s difficulty=%s sites number=%d', iadsconfig.name,
+                        nodeconfig.connection.name, difficulty, difficultySiteNumberToSpawn))
+                end
             end
             if isThereSomethingToSpawn then
                 local RadioCommandAddDifficulty = MENU_MISSION_COMMAND:New(
