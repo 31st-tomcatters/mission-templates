@@ -1,6 +1,6 @@
 {
   "name": "31st-templates",
-  "version": "1.1.0-snapshot",
+  "version": "1.2.0-snapshot",
   "description": "build 31st-template missions",
   "main": "none",
   "scripts": {
@@ -26,6 +26,6 @@
   },
   "homepage": "https://github.com/31st-tomcatters/mission-templates#readme",
   "dependencies": {
-    "@jtff/miztemplate-lib": "^2.1.2"
+    "@jtff/miztemplate-lib": "^2.1.6"
   }
 }

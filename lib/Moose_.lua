@@ -1,4 +1,4 @@
-env.info('*** MOOSE GITHUB Commit Hash ID: 2023-03-10T09:09:08.0000000Z-d92a20050c0c0049777c356c4f4be9ab72c3ee03 ***')
+env.info('*** MOOSE GITHUB Commit Hash ID: 2023-06-08T11:59:59.0000000Z-afe2b675e52abe0bbb0c4343777ab4905c3b7a61 ***')
 env.info('*** MOOSE STATIC INCLUDE START *** ')
 ENUMS={}
 ENUMS.ROE={
@@ -2372,6 +2372,22 @@ return tostring(s)
 elseif type(s)=='string'then
 s=string.format('%q',s)
 return s
+end
+end
+end
+function UTILS.PrintTableToLog(table,indent)
+if not table then
+BASE:E("No table passed!")
+return
+end
+if not indent then indent=0 end
+for k,v in pairs(table)do
+if type(v)=="table"then
+BASE:I(string.rep("  ",indent)..tostring(k).." = {")
+UTILS.PrintTableToLog(v,indent+1)
+BASE:I(string.rep("  ",indent).."}")
+else
+BASE:I(string.rep("  ",indent)..tostring(k).." = "..tostring(v))
 end
 end
 end
@@ -5232,8 +5248,9 @@ TEXT="moose_text",
 BOMBRESULT="moose_bomb_result",
 STRAFERESULT="moose_strafe_result",
 LSOGRADE="moose_lso_grade",
+TTS="moose_text2speech"
 }
-SOCKET.version="0.2.0"
+SOCKET.version="0.3.0"
 function SOCKET:New(Port,Host)
 local self=BASE:Inherit(self,FSM:New())
 package.path=package.path..";.\\LuaSocket\\?.lua;"
@@ -5264,6 +5281,19 @@ function SOCKET:SendText(Text)
 local message={}
 message.command=SOCKET.DataType.TEXT
 message.text=Text
+self:SendTable(message)
+return self
+end
+function SOCKET:SendTextToSpeech(Text,Provider,Voice,Culture,Gender,Volume)
+Text=Text or"Hello World!"
+local message={}
+message.command=SOCKET.DataType.TTS
+message.text=Text
+message.provider=Provider
+message.voice=Voice
+message.culture=Culture
+message.gender=Gender
+message.volume=Volume
 self:SendTable(message)
 return self
 end
@@ -7500,7 +7530,7 @@ Event.TgtTypeName=Event.TgtDCSUnit:getTypeName()
 end
 if Event.TgtObjectCategory==Object.Category.STATIC then
 Event.TgtDCSUnit=Event.target
-if Event.target:isExist()and Event.id~=33 and not Event.TgtObjectCategory==Object.Category.COORDINATE then
+if Event.target:isExist()and Event.id~=33 then
 Event.TgtDCSUnitName=Event.TgtDCSUnit:getName()
 Event.TgtUnitName=Event.TgtDCSUnitName
 Event.TgtUnit=STATIC:FindByName(Event.TgtDCSUnitName,false)
@@ -9316,6 +9346,16 @@ return true
 end
 world.searchObjects(ObjectCategories,SphereSearch,EvaluateZone)
 end
+function ZONE_RADIUS:RemoveJunk()
+local radius=self.Radius
+local vec3=self:GetVec3()
+local volS={
+id=world.VolumeType.SPHERE,
+params={point=vec3,radius=radius}
+}
+local n=world.removeJunk(volS)
+return n
+end
 function ZONE_RADIUS:GetScannedUnits()
 return self.ScanData.Units
 end
@@ -9863,6 +9903,21 @@ local vec2={x=vec1.x,y=vec3.y}
 local vec4={x=vec3.x,y=vec1.y}
 local zone=ZONE_POLYGON_BASE:New(ZoneName or self.ZoneName,{vec1,vec2,vec3,vec4})
 return zone
+end
+function ZONE_POLYGON_BASE:RemoveJunk(Height)
+Height=Height or 1000
+local vec2SW,vec2NE=self:GetBoundingVec2()
+local vec3SW={x=vec2SW.x,y=-Height,z=vec2SW.y}
+local vec3NE={x=vec2NE.x,y=Height,z=vec2NE.y}
+local volume={
+id=world.VolumeType.BOX,
+params={
+min=vec3SW,
+max=vec3SW
+}
+}
+local n=world.removeJunk(volume)
+return n
 end
 function ZONE_POLYGON_BASE:SmokeZone(SmokeColor,Segments)
 self:F2(SmokeColor)
@@ -10504,6 +10559,7 @@ ZONES_GOAL={},
 WAREHOUSES={},
 FLIGHTGROUPS={},
 FLIGHTCONTROLS={},
+OPSZONES={},
 PATHLINES={},
 }
 local _DATABASECoalition=
@@ -10708,6 +10764,23 @@ end
 end
 function DATABASE:DeleteZoneGoal(ZoneName)
 self.ZONES_GOAL[ZoneName]=nil
+end
+end
+do
+function DATABASE:FindOpsZone(ZoneName)
+local ZoneFound=self.OPSZONES[ZoneName]
+return ZoneFound
+end
+function DATABASE:AddOpsZone(OpsZone)
+if OpsZone then
+local ZoneName=OpsZone:GetName()
+if not self.OPSZONES[ZoneName]then
+self.OPSZONES[ZoneName]=OpsZone
+end
+end
+end
+function DATABASE:DeleteOpsZone(ZoneName)
+self.OPSZONES[ZoneName]=nil
 end
 end
 do
@@ -10980,7 +11053,7 @@ function DATABASE:GetCoalitionFromAirbase(AirbaseName)
 return self.AIRBASES[AirbaseName]:GetCoalition()
 end
 function DATABASE:GetCategoryFromAirbase(AirbaseName)
-return self.AIRBASES[AirbaseName]:GetCategory()
+return self.AIRBASES[AirbaseName]:GetAirbaseCategory()
 end
 function DATABASE:_RegisterPlayers()
 local CoalitionsData={AlivePlayersRed=coalition.getPlayers(coalition.side.RED),AlivePlayersBlue=coalition.getPlayers(coalition.side.BLUE),AlivePlayersNeutral=coalition.getPlayers(coalition.side.NEUTRAL)}
@@ -11234,14 +11307,14 @@ self:F2(arg)
 self:ForEach(IteratorFunction,FinalizeFunction,arg,self.PLAYERUNITS)
 return self
 end
-function DATABASE:ForEachClient(IteratorFunction,...)
+function DATABASE:ForEachClient(IteratorFunction,FinalizeFunction,...)
 self:F2(arg)
-self:ForEach(IteratorFunction,arg,self.CLIENTS)
+self:ForEach(IteratorFunction,FinalizeFunction,arg,self.CLIENTS)
 return self
 end
-function DATABASE:ForEachCargo(IteratorFunction,...)
+function DATABASE:ForEachCargo(IteratorFunction,FinalizeFunction,...)
 self:F2(arg)
-self:ForEach(IteratorFunction,arg,self.CARGOS)
+self:ForEach(IteratorFunction,FinalizeFunction,arg,self.CARGOS)
 return self
 end
 function DATABASE:OnEventNewCargo(EventData)
@@ -12003,6 +12076,17 @@ self.Filter.GroupPrefixes[Prefix]=Prefix
 end
 return self
 end
+function SET_GROUP:_ContinousZoneFilter()
+local Database=_DATABASE.GROUPS
+for ObjectName,Object in pairs(Database)do
+if self:IsIncludeObject(Object)and self:IsNotInSet(Object)then
+self:Add(ObjectName,Object)
+elseif(not self:IsIncludeObject(Object))and self:IsInSet(Object)then
+self:Remove(ObjectName)
+end
+end
+return self
+end
 function SET_GROUP:FilterActive(Active)
 Active=Active or not(Active==false)
 self.Filter.Active=Active
@@ -12015,6 +12099,27 @@ self:HandleEvent(EVENTS.Birth,self._EventOnBirth)
 self:HandleEvent(EVENTS.Dead,self._EventOnDeadOrCrash)
 self:HandleEvent(EVENTS.Crash,self._EventOnDeadOrCrash)
 self:HandleEvent(EVENTS.RemoveUnit,self._EventOnDeadOrCrash)
+if self.Filter.Zones then
+self.ZoneTimer=TIMER:New(self._ContinousZoneFilter,self)
+local timing=self.ZoneTimerInterval or 30
+self.ZoneTimer:Start(timing,timing)
+end
+end
+return self
+end
+function SET_GROUP:FilterZoneTimer(Seconds)
+self.ZoneTimerInterval=Seconds or 30
+return self
+end
+function SET_GROUP:FilterStop()
+if _DATABASE then
+self:UnHandleEvent(EVENTS.Birth)
+self:UnHandleEvent(EVENTS.Dead)
+self:UnHandleEvent(EVENTS.Crash)
+self:UnHandleEvent(EVENTS.RemoveUnit)
+if self.Filter.Zones and self.ZoneTimer and self.ZoneTimer:IsRunning()then
+self.ZoneTimer:Stop()
+end
 end
 return self
 end
@@ -12273,7 +12378,6 @@ end
 if self.Filter.Zones then
 local MGroupZone=false
 for ZoneName,Zone in pairs(self.Filter.Zones)do
-self:T3("Zone:",ZoneName)
 if MGroup:IsInZone(Zone)then
 MGroupZone=true
 end
@@ -12282,14 +12386,6 @@ MGroupInclude=MGroupInclude and MGroupZone
 end
 self:T2(MGroupInclude)
 return MGroupInclude
-end
-function SET_GROUP:SetCargoBayWeightLimit()
-local Set=self:GetSet()
-for GroupID,GroupData in pairs(Set)do
-for UnitName,UnitData in pairs(GroupData:GetUnits())do
-UnitData:SetCargoBayWeightLimit()
-end
-end
 end
 function SET_GROUP:GetClosestGroup(Coordinate,Coalitions)
 local Set=self:GetSet()
@@ -12307,6 +12403,14 @@ end
 end
 end
 return gmin,dmin
+end
+function SET_GROUP:SetCargoBayWeightLimit()
+local Set=self:GetSet()
+for GroupID,GroupData in pairs(Set)do
+for UnitName,UnitData in pairs(GroupData:GetUnits())do
+UnitData:SetCargoBayWeightLimit()
+end
+end
 end
 end
 do
@@ -12344,7 +12448,9 @@ end
 function SET_UNIT:AddUnit(Unit)
 self:F2(Unit:GetName())
 self:Add(Unit:GetName(),Unit)
+if Unit:IsInstanceOf("UNIT")then
 Unit:SetCargoBayWeightLimit()
+end
 return self
 end
 function SET_UNIT:AddUnitsByName(AddUnitNames)
@@ -12472,6 +12578,33 @@ end
 end
 return CountU
 end
+function SET_UNIT:_ContinousZoneFilter()
+local Database=_DATABASE.UNITS
+for ObjectName,Object in pairs(Database)do
+if self:IsIncludeObject(Object)and self:IsNotInSet(Object)then
+self:Add(ObjectName,Object)
+elseif(not self:IsIncludeObject(Object))and self:IsInSet(Object)then
+self:Remove(ObjectName)
+end
+end
+return self
+end
+function SET_UNIT:FilterZoneTimer(Seconds)
+self.ZoneTimerInterval=Seconds or 30
+return self
+end
+function SET_UNIT:FilterStop()
+if _DATABASE then
+self:UnHandleEvent(EVENTS.Birth)
+self:UnHandleEvent(EVENTS.Dead)
+self:UnHandleEvent(EVENTS.Crash)
+self:UnHandleEvent(EVENTS.RemoveUnit)
+if self.Filter.Zones and self.ZoneTimer and self.ZoneTimer:IsRunning()then
+self.ZoneTimer:Stop()
+end
+end
+return self
+end
 function SET_UNIT:FilterStart()
 if _DATABASE then
 self:_FilterStart()
@@ -12479,6 +12612,11 @@ self:HandleEvent(EVENTS.Birth,self._EventOnBirth)
 self:HandleEvent(EVENTS.Dead,self._EventOnDeadOrCrash)
 self:HandleEvent(EVENTS.Crash,self._EventOnDeadOrCrash)
 self:HandleEvent(EVENTS.RemoveUnit,self._EventOnDeadOrCrash)
+if self.Filter.Zones then
+self.ZoneTimer=TIMER:New(self._ContinousZoneFilter,self)
+local timing=self.ZoneTimerInterval or 30
+self.ZoneTimer:Start(timing,timing)
+end
 end
 return self
 end
@@ -13336,6 +13474,23 @@ end
 end
 return TypeReport:Text(Delimiter)
 end
+function SET_STATIC:GetClosestStatic(Coordinate,Coalitions)
+local Set=self:GetSet()
+local dmin=math.huge
+local gmin=nil
+for GroupID,GroupData in pairs(Set)do
+local group=GroupData
+if group and group:IsAlive()and(Coalitions==nil or UTILS.IsAnyInTable(Coalitions,group:GetCoalition()))then
+local coord=group:GetCoord()
+local d=UTILS.VecDist3D(Coordinate,coord)
+if d<dmin then
+dmin=d
+gmin=group
+end
+end
+end
+return gmin,dmin
+end
 end
 do
 SET_CLIENT={
@@ -13497,12 +13652,43 @@ self.Filter.Zones[zonename]=Zone
 end
 return self
 end
+function SET_CLIENT:_ContinousZoneFilter()
+local Database=_DATABASE.CLIENTS
+for ObjectName,Object in pairs(Database)do
+if self:IsIncludeObject(Object)and self:IsNotInSet(Object)then
+self:Add(ObjectName,Object)
+elseif(not self:IsIncludeObject(Object))and self:IsInSet(Object)then
+self:Remove(ObjectName)
+end
+end
+return self
+end
+function SET_CLIENT:FilterZoneTimer(Seconds)
+self.ZoneTimerInterval=Seconds or 30
+return self
+end
+function SET_CLIENT:FilterStop()
+if _DATABASE then
+self:UnHandleEvent(EVENTS.Birth)
+self:UnHandleEvent(EVENTS.Dead)
+self:UnHandleEvent(EVENTS.Crash)
+if self.Filter.Zones and self.ZoneTimer and self.ZoneTimer:IsRunning()then
+self.ZoneTimer:Stop()
+end
+end
+return self
+end
 function SET_CLIENT:FilterStart()
 if _DATABASE then
 self:_FilterStart()
 self:HandleEvent(EVENTS.Birth,self._EventOnBirth)
 self:HandleEvent(EVENTS.Dead,self._EventOnDeadOrCrash)
 self:HandleEvent(EVENTS.Crash,self._EventOnDeadOrCrash)
+if self.Filter.Zones then
+self.ZoneTimer=TIMER:New(self._ContinousZoneFilter,self)
+local timing=self.ZoneTimerInterval or 30
+self.ZoneTimer:Start(timing,timing)
+end
 end
 return self
 end
@@ -15249,6 +15435,33 @@ function SET_SCENERY:IsIncludeObject(MScenery)
 self:F2(MScenery)
 return true
 end
+function SET_SCENERY:GetLife0()
+local life0=0
+self:ForEachScenery(
+function(obj)
+local Obj=obj
+life0=life0+Obj:GetLife0()
+end
+)
+return life0
+end
+function SET_SCENERY:GetLife()
+local life=0
+self:ForEachScenery(
+function(obj)
+local Obj=obj
+life=life+Obj:GetLife()
+end
+)
+return life
+end
+function SET_SCENERY:GetRelativeLife()
+local life=self:GetLife()
+local life0=self:GetLife0()
+self:T3(string.format("Set Lifepoints: %d life0 | %d life",life0,life))
+local rlife=math.floor((life/life0)*100)
+return rlife
+end
 end
 do
 COORDINATE={
@@ -15406,7 +15619,6 @@ local gotstatics=false
 local gotunits=false
 local gotscenery=false
 local function EvaluateZone(ZoneObject)
-BASE:T({ZoneObject})
 if ZoneObject then
 local ObjectCategory=ZoneObject:getCategory()
 if ObjectCategory==Object.Category.UNIT and ZoneObject:isExist()then
@@ -15442,6 +15654,29 @@ for _,unit in pairs(units)do
 set:AddUnit(unit)
 end
 return set
+end
+function COORDINATE:ScanStatics(radius)
+local _,_,_,_,statics=self:ScanObjects(radius,false,true,false)
+local set=SET_STATIC:New()
+for _,stat in pairs(statics)do
+set:AddStatic(STATIC:Find(stat))
+end
+return set
+end
+function COORDINATE:FindClosestStatic(radius)
+local units=self:ScanStatics(radius)
+local umin=nil
+local dmin=math.huge
+for _,_unit in pairs(units.Set)do
+local unit=_unit
+local coordinate=unit:GetCoordinate()
+local d=self:Get2DDistance(coordinate)
+if d<dmin then
+dmin=d
+umin=unit
+end
+end
+return umin
 end
 function COORDINATE:FindClosestUnit(radius)
 local units=self:ScanUnits(radius)
@@ -16776,6 +17011,36 @@ self:F2({Controllable=Controllable and Controllable:GetName()})
 local Settings=Settings or(Controllable and _DATABASE:GetPlayerSettings(Controllable:GetPlayerName()))or _SETTINGS
 return self:GetTemperatureText(nil,Settings)
 end
+function COORDINATE:IsInSteepArea(Radius,Minelevation)
+local steep=false
+local elev=Minelevation or 8
+local bdelta=0
+local h0=self:GetLandHeight()
+local radius=Radius or 50
+local diam=radius*2
+for i=0,150,30 do
+local polar=math.fmod(i+180,360)
+local c1=self:Translate(radius,i,false,false)
+local c2=self:Translate(radius,polar,false,false)
+local h1=c1:GetLandHeight()
+local h2=c2:GetLandHeight()
+local d1=math.abs(h1-h2)
+local d2=math.abs(h0-h1)
+local d3=math.abs(h0-h2)
+local dm=d1>d2 and d1 or d2
+local dm1=dm>d3 and dm or d3
+bdelta=dm1>bdelta and dm1 or bdelta
+self:T(string.format("d1=%d, d2=%d, d3=%d, max delta=%d",d1,d2,d3,bdelta))
+end
+local steepness=bdelta/(radius/100)
+if steepness>=elev then steep=true end
+return steep,math.floor(steepness)
+end
+function COORDINATE:IsInFlatArea(Radius,Minelevation)
+local steep,elev=self:IsInSteepArea(Radius,Minelevation)
+local flat=not steep
+return flat,elev
+end
 end
 do
 POINT_VEC3={
@@ -17787,17 +18052,18 @@ self:SetEventPriority(5)
 self.SpawnHookScheduler=SCHEDULER:New(nil)
 return self
 end
-function SPAWN:NewFromTemplate(SpawnTemplate,SpawnTemplatePrefix,SpawnAliasPrefix)
+function SPAWN:NewFromTemplate(SpawnTemplate,SpawnTemplatePrefix,SpawnAliasPrefix,NoMooseNamingPostfix)
 local self=BASE:Inherit(self,BASE:New())
 self:F({SpawnTemplate,SpawnTemplatePrefix,SpawnAliasPrefix})
-if SpawnAliasPrefix==nil or SpawnAliasPrefix==""then
-BASE:I("ERROR: in function NewFromTemplate, required parameter SpawnAliasPrefix is not set")
+if SpawnTemplatePrefix==nil or SpawnTemplatePrefix==""then
+BASE:I("ERROR: in function NewFromTemplate, required parameter SpawnTemplatePrefix is not set")
 return nil
 end
 if SpawnTemplate then
 self.SpawnTemplate=SpawnTemplate
 self.SpawnTemplatePrefix=SpawnTemplatePrefix
-self.SpawnAliasPrefix=SpawnAliasPrefix
+self.SpawnAliasPrefix=SpawnAliasPrefix or SpawnTemplatePrefix
+self.SpawnTemplate.name=SpawnTemplatePrefix
 self.SpawnIndex=0
 self.SpawnCount=0
 self.AliveUnits=0
@@ -17822,6 +18088,10 @@ self.SpawnInitRadio=nil
 self.SpawnInitModex=nil
 self.SpawnInitAirbase=nil
 self.TweakedTemplate=true
+self.MooseNameing=true
+if NoMooseNamingPostfix==true then
+self.MooseNameing=false
+end
 self.SpawnGroups={}
 else
 error("There is no template provided for SpawnTemplatePrefix = '"..SpawnTemplatePrefix.."'")
@@ -17960,6 +18230,18 @@ self.SpawnInnerRadius=InnerRadius or 0
 for GroupID=1,self.SpawnMaxGroups do
 self:_RandomizeRoute(GroupID)
 end
+return self
+end
+function SPAWN:InitSetUnitRelativePositions(Positions)
+self:F({self.SpawnTemplatePrefix,Positions})
+self.SpawnUnitsWithRelativePositions=true
+self.UnitsRelativePositions=Positions
+return self
+end
+function SPAWN:InitSetUnitAbsolutePositions(Positions)
+self:F({self.SpawnTemplatePrefix,Positions})
+self.SpawnUnitsWithAbsolutePositions=true
+self.UnitsAbsolutePositions=Positions
 return self
 end
 function SPAWN:InitRandomizeTemplate(SpawnTemplatePrefixTable)
@@ -18213,6 +18495,33 @@ if self.SpawnInitHeadingMin then
 for UnitID=1,#SpawnTemplate.units do
 SpawnTemplate.units[UnitID].heading=_Heading(_RandomInRange(self.SpawnInitHeadingMin,self.SpawnInitHeadingMax))
 SpawnTemplate.units[UnitID].psi=-SpawnTemplate.units[UnitID].heading
+end
+end
+if self.SpawnUnitsWithRelativePositions and self.UnitsRelativePositions then
+local BaseX=SpawnTemplate.units[1].x or 0
+local BaseY=SpawnTemplate.units[1].y or 0
+local BaseZ=SpawnTemplate.units[1].z or 0
+for UnitID=1,#SpawnTemplate.units do
+if self.UnitsRelativePositions[UnitID].heading then
+SpawnTemplate.units[UnitID].heading=math.rad(self.UnitsRelativePositions[UnitID].heading or 0)
+end
+SpawnTemplate.units[UnitID].x=BaseX+(self.UnitsRelativePositions[UnitID].x or 0)
+SpawnTemplate.units[UnitID].y=BaseY+(self.UnitsRelativePositions[UnitID].y or 0)
+if self.UnitsRelativePositions[UnitID].z then
+SpawnTemplate.units[UnitID].z=BaseZ+(self.UnitsRelativePositions[UnitID].z or 0)
+end
+end
+end
+if self.SpawnUnitsWithAbsolutePositions and self.UnitsAbsolutePositions then
+for UnitID=1,#SpawnTemplate.units do
+if self.UnitsAbsolutePositions[UnitID].heading then
+SpawnTemplate.units[UnitID].heading=math.rad(self.UnitsAbsolutePositions[UnitID].heading or 0)
+end
+SpawnTemplate.units[UnitID].x=self.UnitsAbsolutePositions[UnitID].x or 0
+SpawnTemplate.units[UnitID].y=self.UnitsAbsolutePositions[UnitID].y or 0
+if self.UnitsAbsolutePositions[UnitID].z then
+SpawnTemplate.units[UnitID].z=self.UnitsAbsolutePositions[UnitID].z or 0
+end
 end
 end
 if self.SpawnInitLivery then
@@ -19028,6 +19337,11 @@ local SpawnTemplate
 if self.TweakedTemplate~=nil and self.TweakedTemplate==true then
 BASE:I("WARNING: You are using a tweaked template.")
 SpawnTemplate=self.SpawnTemplate
+if self.MooseNameing==true then
+SpawnTemplate.name=self:SpawnGroupName(SpawnIndex)
+else
+SpawnTemplate.name=self:SpawnGroupName()
+end
 else
 SpawnTemplate=self:_GetTemplate(SpawnTemplatePrefix)
 SpawnTemplate.name=self:SpawnGroupName(SpawnIndex)
@@ -20427,6 +20741,18 @@ end
 self:E({"Cannot GetCoordinate",Positionable=self,Alive=self:IsAlive()})
 return nil
 end
+function POSITIONABLE:Explode(power,delay)
+power=power or 100
+if delay and delay>0 then
+self:ScheduleOnce(delay,POSITIONABLE.Explode,self,power,0)
+else
+local coord=self:GetCoord()
+if coord then
+coord:Explosion(power)
+end
+end
+return self
+end
 function POSITIONABLE:GetOffsetCoordinate(x,y,z)
 x=x or 0
 y=y or 0
@@ -21500,7 +21826,8 @@ self:T({CommandActivateACLS})
 if Delay and Delay>0 then
 SCHEDULER:New(nil,self.CommandActivateACLS,{self,UnitID,Name},Delay)
 else
-self:SetCommand(CommandActivateACLS)
+local controller=self:_GetController()
+controller:setCommand(CommandActivateACLS)
 end
 return self
 end
@@ -21512,7 +21839,8 @@ params={}
 if Delay and Delay>0 then
 SCHEDULER:New(nil,self.CommandDeactivateACLS,{self},Delay)
 else
-self:SetCommand(CommandDeactivateACLS)
+local controller=self:_GetController()
+controller:setCommand(CommandDeactivateACLS)
 end
 return self
 end
@@ -21538,7 +21866,7 @@ local freq=Frequency or 336
 local CommandActivateLink4={
 id="ActivateLink4",
 params={
-["frequency "]=freq*1000000,
+["frequency"]=freq*1000000,
 ["unitId"]=UnitID or self:GetID(),
 ["name"]=Callsign or"LNK",
 }
@@ -21547,7 +21875,8 @@ self:T({CommandActivateLink4})
 if Delay and Delay>0 then
 SCHEDULER:New(nil,self.CommandActivateLink4,{self,Frequency,UnitID,Callsign},Delay)
 else
-self:SetCommand(CommandActivateLink4)
+local controller=self:_GetController()
+controller:setCommand(CommandActivateLink4)
 end
 return self
 end
@@ -21566,7 +21895,8 @@ local CommandDeactivateLink4={id='DeactivateLink4',params={}}
 if Delay and Delay>0 then
 SCHEDULER:New(nil,self.CommandDeactivateLink4,{self},Delay)
 else
-self:SetCommand(CommandDeactivateLink4)
+local controller=self:_GetController()
+controller:setCommand(CommandDeactivateLink4)
 end
 return self
 end
@@ -22088,7 +22418,7 @@ params={},
 }
 return DCSTask
 end
-function CONTROLLABLE:EnRouteTaskFAC_EngageGroup(AttackGroup,Priority,WeaponType,Designation,Datalink)
+function CONTROLLABLE:EnRouteTaskFAC_EngageGroup(AttackGroup,Priority,WeaponType,Designation,Datalink,Frequency,Modulation,CallsignID,CallsignNumber)
 local DCSTask={
 id='FAC_EngageControllable',
 params={
@@ -22096,17 +22426,24 @@ groupId=AttackGroup:GetID(),
 weaponType=WeaponType or"Auto",
 designation=Designation,
 datalink=Datalink and Datalink or false,
+frequency=(Frequency or 133)*1000000,
+modulation=Modulation or radio.modulation.AM,
+callname=CallsignID,
+number=CallsignNumber,
 priority=Priority or 0,
 },
 }
 return DCSTask
 end
-function CONTROLLABLE:EnRouteTaskFAC(Radius,Priority)
+function CONTROLLABLE:EnRouteTaskFAC(Frequency,Modulation,CallsignID,CallsignNumber,Priority)
 local DCSTask={
 id='FAC',
 params={
-radius=Radius,
-priority=Priority
+frequency=(Frequency or 133)*1000000,
+modulation=Modulation or radio.modulation.AM,
+callname=CallsignID,
+number=CallsignNumber,
+priority=Priority or 0
 }
 }
 return DCSTask
@@ -24803,6 +25140,7 @@ UNIT={
 ClassName="UNIT",
 UnitName=nil,
 GroupName=nil,
+DCSUnit=nil,
 }
 function UNIT:Register(UnitName)
 local self=BASE:Inherit(self,CONTROLLABLE:New(UnitName))
@@ -24813,6 +25151,7 @@ local group=unit:getGroup()
 if group then
 self.GroupName=group:getName()
 end
+self.DCSUnit=unit
 end
 self:SetEventPriority(3)
 return self
@@ -24836,6 +25175,9 @@ function UNIT:GetDCSObject()
 local DCSUnit=Unit.getByName(self.UnitName)
 if DCSUnit then
 return DCSUnit
+end
+if self.DCSUnit then
+return self.DCSUnit
 end
 return nil
 end
@@ -25238,7 +25580,7 @@ end
 function UNIT:GetLife()
 self:F2(self.UnitName)
 local DCSUnit=self:GetDCSObject()
-if DCSUnit then
+if DCSUnit and DCSUnit:isExist()then
 local UnitLife=DCSUnit:getLife()
 return UnitLife
 end
@@ -26031,14 +26373,46 @@ AIRBASE.Normandy={
 ["Needs_Oar_Point"]="Needs Oar Point",
 ["Funtington"]="Funtington",
 ["Tangmere"]="Tangmere",
-["Ford_AF"]="Ford_AF",
-["Goulet"]="Goulet",
+["Ford"]="Ford",
 ["Argentan"]="Argentan",
-["Vrigny"]="Vrigny",
+["Goulet"]="Goulet",
+["Barville"]="Barville",
 ["Essay"]="Essay",
 ["Hauterive"]="Hauterive",
-["Barville"]="Barville",
+["Lymington"]="Lymington",
+["Vrigny"]="Vrigny",
+["Odiham"]="Odiham",
 ["Conches"]="Conches",
+["West_Malling"]="West Malling",
+["Villacoublay"]="Villacoublay",
+["Kenley"]="Kenley",
+["Beauvais_Tille"]="Beauvais-Tille",
+["Cormeilles_en_Vexin"]="Cormeilles-en-Vexin",
+["Creil"]="Creil",
+["Guyancourt"]="Guyancourt",
+["Lonrai"]="Lonrai",
+["Dinan_Trelivan"]="Dinan-Trelivan",
+["Heathrow"]="Heathrow",
+["Fecamp_Benouville"]="Fecamp-Benouville",
+["Farnborough"]="Farnborough",
+["Friston"]="Friston",
+["Deanland "]="Deanland ",
+["Triqueville"]="Triqueville",
+["Poix"]="Poix",
+["Orly"]="Orly",
+["Stoney_Cross"]="Stoney Cross",
+["Amiens_Glisy"]="Amiens-Glisy",
+["Ronai"]="Ronai",
+["Rouen_Boos"]="Rouen-Boos",
+["Deauville"]="Deauville",
+["Saint_Aubin"]="Saint-Aubin",
+["Flers"]="Flers",
+["Avranches_Le_Val_Saint_Pere"]="Avranches Le Val-Saint-Pere",
+["Gravesend"]="Gravesend",
+["Beaumont_le_Roger"]="Beaumont-le-Roger",
+["Broglie"]="Broglie",
+["Bernay_Saint_Martin"]="Bernay Saint Martin",
+["Saint_Andre_de_lEure"]="Saint-Andre-de-lEure",
 }
 AIRBASE.PersianGulf={
 ["Abu_Dhabi_International_Airport"]="Abu Dhabi Intl",
@@ -26180,8 +26554,12 @@ AIRBASE.SouthAtlantic={
 ["Rio_Chico"]="Rio Chico",
 ["Franco_Bianco"]="Franco Bianco",
 ["Goose_Green"]="Goose Green",
-["Hipico"]="Hipico",
+["Hipico_Flying_Club"]="Hipico Flying Club",
 ["CaletaTortel"]="CaletaTortel",
+["Aeropuerto_de_Gobernador_Gregores"]="Aeropuerto de Gobernador Gregores",
+["Aerodromo_O_Higgins"]="Aerodromo O'Higgins",
+["Cullen_Airport"]="Cullen Airport",
+["Gull_Point"]="Gull Point",
 }
 AIRBASE.TerminalType={
 Runway=16,
@@ -27054,6 +27432,12 @@ self:T(string.format("%s, checking if group %s is on runway. Group is NOT alive.
 end
 return false
 end
+function AIRBASE:GetCategory()
+return self.category
+end
+function AIRBASE:GetCategoryName()
+return AIRBASE.CategoryName[self.category]
+end
 SCENERY={
 ClassName="SCENERY",
 }
@@ -27075,6 +27459,9 @@ function SCENERY:GetLife()
 local life=0
 if self.SceneryObject then
 life=self.SceneryObject:getLife()
+if life>self.Life0 then
+self.Life0=math.floor(life*1.2)
+end
 end
 return life
 end
@@ -27094,6 +27481,7 @@ function SCENERY:FindByName(Name,Coordinate,Radius)
 local radius=Radius or 100
 local name=Name or"unknown"
 local scenery=nil
+BASE:T({name,radius,Coordinate:GetVec2()})
 local function SceneryScan(coordinate,radius,name)
 if coordinate~=nil then
 local scenerylist=coordinate:ScanScenery(radius)
@@ -27129,6 +27517,7 @@ if type(ZoneName)=="string"then
 zone=ZONE:FindByName(ZoneName)
 end
 local _id=zone:GetProperty('OBJECT ID')
+BASE:T("Object ID ".._id)
 if not _id then
 BASE:E("**** Zone without object ID: "..ZoneName.." | Type: "..tostring(zone.ClassName))
 if string.find(zone.ClassName,"POLYGON")then
@@ -27716,7 +28105,7 @@ end
 self.tracking=false
 end
 if self.tracking then
-if self.dtTrack and self.dtTrack>0.001 then
+if self.dtTrack and self.dtTrack>=0.00001 then
 return time+self.dtTrack
 else
 return nil
@@ -27735,7 +28124,7 @@ end
 do
 NET={
 ClassName="NET",
-Version="0.1.0",
+Version="0.1.1",
 BlockTime=600,
 BlockedPilots={},
 BlockedUCIDs={},
@@ -27793,7 +28182,7 @@ self:T2({Event=EventData.id})
 local data=EventData
 if data.id and data.IniUnit and(data.IniPlayerName or data.IniUnit:GetPlayerName())then
 local name=data.IniPlayerName and data.IniPlayerName or data.IniUnit:GetPlayerName()
-local ucid=self:GetPlayerUCID(nil,name)
+local ucid=self:GetPlayerUCID(nil,name)or"none"
 local PlayerID=self:GetPlayerIDByName(name)or"none"
 local PlayerSide,PlayerSlot=self:GetSlot(data.IniUnit)
 local TNow=timer.getTime()
@@ -28118,7 +28507,7 @@ return nil
 end
 end
 function NET:onafterStatus(From,Event,To)
-self:T({From,Event,To})
+self:I({From,Event,To})
 local function HouseHold(tavolo)
 local TNow=timer.getTime()
 for _,entry in pairs(tavolo)do
@@ -28135,7 +28524,7 @@ end
 return self
 end
 function NET:onafterRun(From,Event,To)
-self:T({From,Event,To})
+self:I({From,Event,To})
 self:HandleEvent(EVENTS.PlayerEnterUnit,self._EventHandler)
 self:HandleEvent(EVENTS.PlayerEnterAircraft,self._EventHandler)
 self:HandleEvent(EVENTS.PlayerLeaveUnit,self._EventHandler)
@@ -29719,23 +30108,27 @@ local PlayerData=self.Players[PlayerName]
 PlayerData.Goals[GoalTag]=PlayerData.Goals[GoalTag]or{Score=0}
 PlayerData.Goals[GoalTag].Score=PlayerData.Goals[GoalTag].Score+Score
 PlayerData.Score=PlayerData.Score+Score
+if Text then
 MESSAGE:NewType(self.DisplayMessagePrefix..Text,
 MESSAGE.Type.Information)
 :ToAll()
+end
 self:ScoreCSV(PlayerName,"","GOAL_"..string.upper(GoalTag),1,Score,nil)
 end
 end
 function SCORING:AddGoalScore(PlayerUnit,GoalTag,Text,Score)
 local PlayerName=PlayerUnit:GetPlayerName()
-self:F({PlayerUnit.UnitName,PlayerName,GoalTag,Text,Score})
+self:T2({PlayerUnit.UnitName,PlayerName,GoalTag,Text,Score})
 if PlayerName then
 local PlayerData=self.Players[PlayerName]
 PlayerData.Goals[GoalTag]=PlayerData.Goals[GoalTag]or{Score=0}
 PlayerData.Goals[GoalTag].Score=PlayerData.Goals[GoalTag].Score+Score
 PlayerData.Score=PlayerData.Score+Score
+if Text then
 MESSAGE:NewType(self.DisplayMessagePrefix..Text,
 MESSAGE.Type.Information)
 :ToAll()
+end
 self:ScoreCSV(PlayerName,"","GOAL_"..string.upper(GoalTag),1,Score,PlayerUnit:GetName())
 end
 end
@@ -29754,9 +30147,11 @@ self:T(PlayerName)
 self:T(PlayerData.Mission[MissionName])
 PlayerData.Score=self.Players[PlayerName].Score+Score
 PlayerData.Mission[MissionName].ScoreTask=self.Players[PlayerName].Mission[MissionName].ScoreTask+Score
+if Text then
 MESSAGE:NewType(self.DisplayMessagePrefix..Mission:GetText().." : "..Text.." Score: "..Score,
 MESSAGE.Type.Information)
 :ToAll()
+end
 self:ScoreCSV(PlayerName,"","TASK_"..MissionName:gsub(' ','_'),1,Score,PlayerUnit:GetName())
 end
 end
@@ -29774,7 +30169,9 @@ self:T(PlayerName)
 self:T(PlayerData.Mission[MissionName])
 PlayerData.Score=self.Players[PlayerName].Score+Score
 PlayerData.Mission[MissionName].ScoreTask=self.Players[PlayerName].Mission[MissionName].ScoreTask+Score
+if Text then
 MESSAGE:NewType(string.format("%s%s: %s! Player %s receives %d score!",self.DisplayMessagePrefix,Mission:GetText(),Text,PlayerName,Score),MESSAGE.Type.Information):ToAll()
+end
 self:ScoreCSV(PlayerName,"","TASK_"..MissionName:gsub(' ','_'),1,Score)
 end
 end
@@ -29787,9 +30184,11 @@ self:F(PlayerData)
 if PlayerData.Mission[MissionName]then
 PlayerData.Score=PlayerData.Score+Score
 PlayerData.Mission[MissionName].ScoreMission=PlayerData.Mission[MissionName].ScoreMission+Score
+if Text then
 MESSAGE:NewType(self.DisplayMessagePrefix.."Player '"..PlayerName.."' has "..Text.." in "..Mission:GetText()..". "..Score.." mission score!",
 MESSAGE.Type.Information)
 :ToAll()
+end
 self:ScoreCSV(PlayerName,"","MISSION_"..MissionName:gsub(' ','_'),1,Score)
 end
 end
@@ -38169,6 +38568,7 @@ Debug=false,
 rat={},
 name={},
 alive={},
+planned={},
 min={},
 nrat=0,
 ntot=nil,
@@ -38190,6 +38590,7 @@ ratobject.f10menu=false
 self.nrat=self.nrat+1
 self.rat[self.nrat]=ratobject
 self.alive[self.nrat]=0
+self.planned[self.nrat]=0
 self.name[self.nrat]=ratobject.alias
 self.min[self.nrat]=min or 1
 self:T(RATMANAGER.id..string.format("Adding ratobject %s with min flights = %d",self.name[self.nrat],self.min[self.nrat]))
@@ -38262,9 +38663,15 @@ local time=0.0
 for i=1,self.nrat do
 for j=1,N[i]do
 time=time+self.dTspawn
-SCHEDULER:New(nil,RAT._SpawnWithRoute,{self.rat[i]},time)
+self.planned[i]=self.planned[i]+1
+SCHEDULER:New(nil,RATMANAGER._Spawn,{self,i},time)
 end
 end
+end
+function RATMANAGER:_Spawn(i)
+local rat=self.rat[i]
+rat:_SpawnWithRoute()
+self.planned[i]=self.planned[i]-1
 end
 function RATMANAGER:_Count()
 local ntotal=0
@@ -38279,7 +38686,7 @@ end
 end
 self.alive[i]=n
 ntotal=ntotal+n
-local text=string.format("Number of alive groups of %s = %d",self.name[i],n)
+local text=string.format("Number of alive groups of %s = %d, planned=%d",self.name[i],n,self.planned[i])
 self:T(RATMANAGER.id..text)
 end
 return ntotal
@@ -38296,9 +38703,10 @@ local N={}
 local M={}
 local P={}
 for i=1,nrat do
+local a=alive[i]+self.planned[i]
 N[#N+1]=0
-M[#M+1]=math.max(alive[i],min[i])
-P[#P+1]=math.max(min[i]-alive[i],0)
+M[#M+1]=math.max(a,min[i])
+P[#P+1]=math.max(min[i]-a,0)
 end
 local mini={}
 local maxi={}
@@ -38309,7 +38717,7 @@ end
 local done={}
 local nnew=ntot
 for i=1,nrat do
-nnew=nnew-alive[i]
+nnew=nnew-alive[i]-self.planned[i]
 end
 for i=1,nrat-1 do
 local r=math.random(#rattab)
@@ -38325,7 +38733,7 @@ N[j]=math.random(mini[j],maxi[j])
 else
 N[j]=0
 end
-self:T3(string.format("RATMANAGER: i=%d, alive=%d, min=%d, mini=%d, maxi=%d, add=%d, sumN=%d, sumP=%d",j,alive[j],min[j],mini[j],maxi[j],N[j],sN,sP))
+self:T3(string.format("RATMANAGER: i=%d, alive=%d, planned=%d, min=%d, mini=%d, maxi=%d, add=%d, sumN=%d, sumP=%d",j,alive[j],self.planned[i],min[j],mini[j],maxi[j],N[j],sN,sP))
 end
 local j=rattab[1]
 N[j]=nnew-sum(N,done)
@@ -38335,7 +38743,7 @@ table.remove(rattab,1)
 table.insert(done,j)
 local text=RATMANAGER.id.."\n"
 for i=1,nrat do
-text=text..string.format("%s: i=%d, alive=%d, min=%d, mini=%d, maxi=%d, add=%d\n",self.name[i],i,alive[i],min[i],mini[i],maxi[i],N[i])
+text=text..string.format("%s: i=%d, alive=%d, planned=%d, min=%d, mini=%d, maxi=%d, add=%d\n",self.name[i],i,alive[i],self.planned[i],min[i],mini[i],maxi[i],N[i])
 end
 text=text..string.format("Total # of groups to add = %d",sum(N,done))
 self:T(text)
@@ -43986,7 +44394,7 @@ eventsmoose=true,
 reportplayername=false,
 }
 PSEUDOATC.id="PseudoATC | "
-PSEUDOATC.version="0.9.5"
+PSEUDOATC.version="0.10.5"
 function PSEUDOATC:New()
 local self=BASE:Inherit(self,BASE:New())
 self:E(PSEUDOATC.id..string.format("PseudoATC version %s",PSEUDOATC.version))
@@ -43994,18 +44402,12 @@ return self
 end
 function PSEUDOATC:Start()
 self:F()
-self:E(PSEUDOATC.id.."Starting PseudoATC")
-if self.eventsmoose then
-self:T(PSEUDOATC.id.."Events are handled by MOOSE.")
+self:I(PSEUDOATC.id.."Starting PseudoATC")
 self:HandleEvent(EVENTS.Birth,self._OnBirth)
 self:HandleEvent(EVENTS.Land,self._PlayerLanded)
 self:HandleEvent(EVENTS.Takeoff,self._PlayerTakeOff)
 self:HandleEvent(EVENTS.PlayerLeaveUnit,self._PlayerLeft)
 self:HandleEvent(EVENTS.Crash,self._PlayerLeft)
-else
-self:T(PSEUDOATC.id.."Events are handled by DCS.")
-world.addEventHandler(self)
-end
 end
 function PSEUDOATC:DebugOn()
 self.Debug=true
@@ -44035,56 +44437,11 @@ end
 function PSEUDOATC:SetReportAltInterval(interval)
 self.talt=interval or 3
 end
-function PSEUDOATC:onEvent(Event)
-if Event==nil or Event.initiator==nil or Unit.getByName(Event.initiator:getName())==nil then
-return true
-end
-local DCSiniunit=Event.initiator
-local DCSplace=Event.place
-local DCSsubplace=Event.subplace
-local EventData={}
-local _playerunit=nil
-local _playername=nil
-if Event.initiator then
-EventData.IniUnitName=Event.initiator:getName()
-EventData.IniDCSGroup=Event.initiator:getGroup()
-EventData.IniGroupName=Event.initiator:getGroup():getName()
-_playerunit,_playername=self:_GetPlayerUnitAndName(EventData.IniUnitName)
-end
-if Event.place then
-EventData.Place=Event.place
-EventData.PlaceName=Event.place:getName()
-end
-if Event.subplace then
-EventData.SubPlace=Event.subplace
-EventData.SubPlaceName=Event.subplace:getName()
-end
-self:T3(PSEUDOATC.id..string.format("EVENT: Event in onEvent with ID = %s",tostring(Event.id)))
-self:T3(PSEUDOATC.id..string.format("EVENT: Ini unit   = %s",tostring(EventData.IniUnitName)))
-self:T3(PSEUDOATC.id..string.format("EVENT: Ini group  = %s",tostring(EventData.IniGroupName)))
-self:T3(PSEUDOATC.id..string.format("EVENT: Ini player = %s",tostring(_playername)))
-self:T3(PSEUDOATC.id..string.format("EVENT: Place      = %s",tostring(EventData.PlaceName)))
-self:T3(PSEUDOATC.id..string.format("EVENT: SubPlace   = %s",tostring(EventData.SubPlaceName)))
-if Event.id==world.event.S_EVENT_BIRTH and _playername then
-self:_OnBirth(EventData)
-end
-if Event.id==world.event.S_EVENT_TAKEOFF and _playername and EventData.Place then
-self:_PlayerTakeOff(EventData)
-end
-if Event.id==world.event.S_EVENT_LAND and _playername and EventData.Place then
-self:_PlayerLanded(EventData)
-end
-if Event.id==world.event.S_EVENT_PLAYER_LEAVE_UNIT and _playername then
-self:_PlayerLeft(EventData)
-end
-if Event.id==world.event.S_EVENT_CRASH and _playername then
-self:_PlayerLeft(EventData)
-end
-end
 function PSEUDOATC:_OnBirth(EventData)
 self:F({EventData=EventData})
 local _unitName=EventData.IniUnitName
-local _unit,_playername=self:_GetPlayerUnitAndName(_unitName)
+local _unit=EventData.IniUnit
+local _playername=EventData.IniPlayerName
 if _unit and _playername then
 self:PlayerEntered(_unit)
 end
@@ -44092,7 +44449,8 @@ end
 function PSEUDOATC:_PlayerLeft(EventData)
 self:F({EventData=EventData})
 local _unitName=EventData.IniUnitName
-local _unit,_playername=self:_GetPlayerUnitAndName(_unitName)
+local _unit=EventData.IniUnit
+local _playername=EventData.IniPlayerName
 if _unit and _playername then
 self:PlayerLeft(_unit)
 end
@@ -44100,7 +44458,8 @@ end
 function PSEUDOATC:_PlayerLanded(EventData)
 self:F({EventData=EventData})
 local _unitName=EventData.IniUnitName
-local _unit,_playername=self:_GetPlayerUnitAndName(_unitName)
+local _unit=EventData.IniUnit
+local _playername=EventData.IniPlayerName
 local _base=nil
 local _baseName=nil
 if EventData.place then
@@ -44114,7 +44473,8 @@ end
 function PSEUDOATC:_PlayerTakeOff(EventData)
 self:F({EventData=EventData})
 local _unitName=EventData.IniUnitName
-local _unit,_playername=self:_GetPlayerUnitAndName(_unitName)
+local _unit=EventData.IniUnit
+local _playername=EventData.IniPlayerName
 local _base=nil
 local _baseName=nil
 if EventData.place then
@@ -44403,7 +44763,7 @@ end
 function PSEUDOATC:AltitudeTimeStart(GID,UID)
 self:F({GID=GID,UID=UID})
 self:T(PSEUDOATC.id..string.format("Starting altitude report timer for player ID %d.",UID))
-self.group[GID].player[UID].altimer,self.group[GID].player[UID].altimerid=SCHEDULER:New(nil,self.ReportHeight,{self,GID,UID,0.1,true},1,3)
+self.group[GID].player[UID].altimer,self.group[GID].player[UID].altimerid=SCHEDULER:New(nil,self.ReportHeight,{self,GID,UID,1,true},1,3)
 end
 function PSEUDOATC:AltitudeTimerStop(GID,UID)
 self:F({GID=GID,UID=UID})
@@ -44572,7 +44932,7 @@ Assets={},
 WarehouseID=0,
 Warehouses={}
 }
-WAREHOUSE.version="1.0.2"
+WAREHOUSE.version="1.0.2a"
 function WAREHOUSE:New(warehouse,alias)
 local self=BASE:Inherit(self,FSM:New())
 if type(warehouse)=="string"then
@@ -45704,7 +46064,8 @@ spawngroup=self:_SpawnAssetGroundNaval(_alias,_assetitem,Request,self.spawnzone)
 elseif Request.transporttype==WAREHOUSE.TransportType.TRAIN then
 self:_ErrorMessage("ERROR: Cargo transport by train not supported yet!")
 return
-elseif Request.transporttype==WAREHOUSE.TransportType.SHIP or Request.transporttype==WAREHOUSE.TransportType.NAVALCARRIER then
+elseif Request.transporttype==WAREHOUSE.TransportType.SHIP or Request.transporttype==WAREHOUSE.TransportType.NAVALCARRIER
+or Request.transporttype==WAREHOUSE.TransportType.ARMEDSHIP or Request.transporttype==WAREHOUSE.TransportType.WARSHIP then
 spawngroup=self:_SpawnAssetGroundNaval(_alias,_assetitem,Request,self.portzone)
 elseif Request.transporttype==WAREHOUSE.TransportType.SELFPROPELLED then
 self:_ErrorMessage("ERROR: Transport type selfpropelled was already handled above. We should not get here!")
@@ -46293,7 +46654,7 @@ end
 local UnControlled=true
 for i=1,#cargoassets do
 local asset=cargoassets[i]
-asset.spawned=false
+if not asset.spawned then
 asset.iscargo=true
 asset.rid=Request.uid
 local _alias=asset.spawngroupname
@@ -46318,6 +46679,7 @@ self:E(self.lid.."ERROR: Unknown asset category!")
 end
 if _group then
 self:__AssetSpawned(0.01,_group,asset,Request)
+end
 end
 end
 end
@@ -53689,6 +54051,7 @@ self:E(self.lid.."ERROR: EventData.IniUnit=nil in event BIRTH!")
 self:E(EventData)
 return
 end
+if EventData.IniObjectCategory~=Object.Category.UNIT then return end
 local _unitName=EventData.IniUnitName
 local _unit,_playername=self:_GetPlayerUnitAndName(_unitName)
 self:T(self.lid.."BIRTH: unit   = "..tostring(EventData.IniUnitName))
@@ -59557,7 +59920,8 @@ if EventData.IniGroupName~=self.helo:GetName()then
 local text=string.format("Unit %s crashed or ejected.",unitname)
 MESSAGE:New(text,10,"DEBUG"):ToAllIf(self.Debug)
 self:T(self.lid..text)
-local coord=unit:GetCoordinate()
+local Vec3=EventData.IniDCSUnit:getPoint()
+local coord=COORDINATE:NewFromVec3(Vec3)
 if coord and self.rescuezone:IsCoordinateInZone(coord)then
 if self.Debug then
 coord:MarkToCoalition(self.lid..string.format("Crash site of unit %s.",unitname),self.helo:GetCoalition())
@@ -61159,6 +61523,150 @@ local h=S[2]
 return t,h
 end
 do
+CTLD_CARGO={
+ClassName="CTLD_CARGO",
+ID=0,
+Name="none",
+Templates={},
+CargoType="none",
+HasBeenMoved=false,
+LoadDirectly=false,
+CratesNeeded=0,
+Positionable=nil,
+HasBeenDropped=false,
+PerCrateMass=0,
+Stock=nil,
+Mark=nil,
+}
+CTLD_CARGO.Enum={
+VEHICLE="Vehicle",
+TROOPS="Troops",
+FOB="FOB",
+CRATE="Crate",
+REPAIR="Repair",
+ENGINEERS="Engineers",
+STATIC="Static",
+}
+function CTLD_CARGO:New(ID,Name,Templates,Sorte,HasBeenMoved,LoadDirectly,CratesNeeded,Positionable,Dropped,PerCrateMass,Stock,Subcategory)
+local self=BASE:Inherit(self,BASE:New())
+self:T({ID,Name,Templates,Sorte,HasBeenMoved,LoadDirectly,CratesNeeded,Positionable,Dropped})
+self.ID=ID or math.random(100000,1000000)
+self.Name=Name or"none"
+self.Templates=Templates or{}
+self.CargoType=Sorte or"type"
+self.HasBeenMoved=HasBeenMoved or false
+self.LoadDirectly=LoadDirectly or false
+self.CratesNeeded=CratesNeeded or 0
+self.Positionable=Positionable or nil
+self.HasBeenDropped=Dropped or false
+self.PerCrateMass=PerCrateMass or 0
+self.Stock=Stock or nil
+self.Mark=nil
+self.Subcategory=Subcategory or"Other"
+return self
+end
+function CTLD_CARGO:GetID()
+return self.ID
+end
+function CTLD_CARGO:GetSubCat()
+return self.Subcategory
+end
+function CTLD_CARGO:GetMass()
+return self.PerCrateMass
+end
+function CTLD_CARGO:GetName()
+return self.Name
+end
+function CTLD_CARGO:GetTemplates()
+return self.Templates
+end
+function CTLD_CARGO:HasMoved()
+return self.HasBeenMoved
+end
+function CTLD_CARGO:WasDropped()
+return self.HasBeenDropped
+end
+function CTLD_CARGO:CanLoadDirectly()
+return self.LoadDirectly
+end
+function CTLD_CARGO:GetCratesNeeded()
+return self.CratesNeeded
+end
+function CTLD_CARGO:GetType()
+return self.CargoType
+end
+function CTLD_CARGO:GetPositionable()
+return self.Positionable
+end
+function CTLD_CARGO:SetHasMoved(moved)
+self.HasBeenMoved=moved or false
+end
+function CTLD_CARGO:Isloaded()
+if self.HasBeenMoved and not self.WasDropped()then
+return true
+else
+return false
+end
+end
+function CTLD_CARGO:SetWasDropped(dropped)
+self.HasBeenDropped=dropped or false
+end
+function CTLD_CARGO:GetStock()
+if self.Stock then
+return self.Stock
+else
+return-1
+end
+end
+function CTLD_CARGO:AddStock(Number)
+if self.Stock then
+local number=Number or 1
+self.Stock=self.Stock+number
+end
+return self
+end
+function CTLD_CARGO:RemoveStock(Number)
+if self.Stock then
+local number=Number or 1
+self.Stock=self.Stock-number
+if self.Stock<0 then self.Stock=0 end
+end
+return self
+end
+function CTLD_CARGO:SetStock(Number)
+self.Stock=Number
+return self
+end
+function CTLD_CARGO:IsRepair()
+if self.CargoType=="Repair"then
+return true
+else
+return false
+end
+end
+function CTLD_CARGO:IsStatic()
+if self.CargoType=="Static"then
+return true
+else
+return false
+end
+end
+function CTLD_CARGO:AddMark(Mark)
+self.Mark=Mark
+return self
+end
+function CTLD_CARGO:GetMark(Mark)
+return self.Mark
+end
+function CTLD_CARGO:WipeMark()
+self.Mark=nil
+return self
+end
+function CTLD_CARGO:GetNetMass()
+return self.CratesNeeded*self.PerCrateMass
+end
+end
+do
 CTLD_ENGINEERING={
 ClassName="CTLD_ENGINEERING",
 lid="",
@@ -61317,150 +61825,6 @@ end
 end
 end
 do
-CTLD_CARGO={
-ClassName="CTLD_CARGO",
-ID=0,
-Name="none",
-Templates={},
-CargoType="none",
-HasBeenMoved=false,
-LoadDirectly=false,
-CratesNeeded=0,
-Positionable=nil,
-HasBeenDropped=false,
-PerCrateMass=0,
-Stock=nil,
-Mark=nil,
-}
-CTLD_CARGO.Enum={
-VEHICLE="Vehicle",
-TROOPS="Troops",
-FOB="FOB",
-CRATE="Crate",
-REPAIR="Repair",
-ENGINEERS="Engineers",
-STATIC="Static",
-}
-function CTLD_CARGO:New(ID,Name,Templates,Sorte,HasBeenMoved,LoadDirectly,CratesNeeded,Positionable,Dropped,PerCrateMass,Stock,Subcategory)
-local self=BASE:Inherit(self,BASE:New())
-self:T({ID,Name,Templates,Sorte,HasBeenMoved,LoadDirectly,CratesNeeded,Positionable,Dropped})
-self.ID=ID or math.random(100000,1000000)
-self.Name=Name or"none"
-self.Templates=Templates or{}
-self.CargoType=Sorte or"type"
-self.HasBeenMoved=HasBeenMoved or false
-self.LoadDirectly=LoadDirectly or false
-self.CratesNeeded=CratesNeeded or 0
-self.Positionable=Positionable or nil
-self.HasBeenDropped=Dropped or false
-self.PerCrateMass=PerCrateMass or 0
-self.Stock=Stock or nil
-self.Mark=nil
-self.Subcategory=Subcategory or"Other"
-return self
-end
-function CTLD_CARGO:GetID()
-return self.ID
-end
-function CTLD_CARGO:GetSubCat()
-return self.Subcategory
-end
-function CTLD_CARGO:GetMass()
-return self.PerCrateMass
-end
-function CTLD_CARGO:GetName()
-return self.Name
-end
-function CTLD_CARGO:GetTemplates()
-return self.Templates
-end
-function CTLD_CARGO:HasMoved()
-return self.HasBeenMoved
-end
-function CTLD_CARGO:WasDropped()
-return self.HasBeenDropped
-end
-function CTLD_CARGO:CanLoadDirectly()
-return self.LoadDirectly
-end
-function CTLD_CARGO:GetCratesNeeded()
-return self.CratesNeeded
-end
-function CTLD_CARGO:GetType()
-return self.CargoType
-end
-function CTLD_CARGO:GetPositionable()
-return self.Positionable
-end
-function CTLD_CARGO:SetHasMoved(moved)
-self.HasBeenMoved=moved or false
-end
-function CTLD_CARGO:Isloaded()
-if self.HasBeenMoved and not self.WasDropped()then
-return true
-else
-return false
-end
-end
-function CTLD_CARGO:SetWasDropped(dropped)
-self.HasBeenDropped=dropped or false
-end
-function CTLD_CARGO:GetStock()
-if self.Stock then
-return self.Stock
-else
-return-1
-end
-end
-function CTLD_CARGO:AddStock(Number)
-if self.Stock then
-local number=Number or 1
-self.Stock=self.Stock+number
-end
-return self
-end
-function CTLD_CARGO:RemoveStock(Number)
-if self.Stock then
-local number=Number or 1
-self.Stock=self.Stock-number
-if self.Stock<0 then self.Stock=0 end
-end
-return self
-end
-function CTLD_CARGO:SetStock(Number)
-self.Stock=Number
-return self
-end
-function CTLD_CARGO:IsRepair()
-if self.CargoType=="Repair"then
-return true
-else
-return false
-end
-end
-function CTLD_CARGO:IsStatic()
-if self.CargoType=="Static"then
-return true
-else
-return false
-end
-end
-function CTLD_CARGO:AddMark(Mark)
-self.Mark=Mark
-return self
-end
-function CTLD_CARGO:GetMark(Mark)
-return self.Mark
-end
-function CTLD_CARGO:WipeMark()
-self.Mark=nil
-return self
-end
-function CTLD_CARGO:GetNetMass()
-return self.CratesNeeded*self.PerCrateMass
-end
-end
-do
 CTLD={
 ClassName="CTLD",
 verbose=0,
@@ -61512,7 +61876,7 @@ CTLD.UnitTypes={
 ["AH-64D_BLK_II"]={type="AH-64D_BLK_II",crates=false,troops=true,cratelimit=0,trooplimit=2,length=17,cargoweightlimit=200},
 ["Bronco-OV-10A"]={type="Bronco-OV-10A",crates=false,troops=true,cratelimit=0,trooplimit=5,length=13,cargoweightlimit=1450},
 }
-CTLD.version="1.0.32"
+CTLD.version="1.0.39"
 function CTLD:New(Coalition,Prefixes,Alias)
 local self=BASE:Inherit(self,FSM:New())
 BASE:T({Coalition,Prefixes,Alias})
@@ -61569,6 +61933,7 @@ self.UsedVHFFrequencies={}
 self.UsedUHFFrequencies={}
 self.UsedFMFrequencies={}
 self.RadioSound="beacon.ogg"
+self.RadioSoundFC3="beacon.ogg"
 self.RadioPath="l10n/DEFAULT/"
 self.pickupZones={}
 self.dropOffZones={}
@@ -61577,6 +61942,7 @@ self.shipZones={}
 self.droppedBeacons={}
 self.droppedbeaconref={}
 self.droppedbeacontimeout=600
+self.useprecisecoordloads=true
 self.Cargo_Crates={}
 self.Cargo_Troops={}
 self.Cargo_Statics={}
@@ -61602,6 +61968,7 @@ self.minimumHoverHeight=4
 self.forcehoverload=true
 self.hoverautoloading=true
 self.dropcratesanywhere=false
+self.dropAsCargoCrate=false
 self.smokedistance=2000
 self.movetroopstowpzone=true
 self.movetroopsdistance=5000
@@ -61702,6 +62069,8 @@ local _coalition=event.IniCoalition
 if _coalition~=self.coalition then
 return
 end
+local unitname=event.IniUnitName or"none"
+self.MenusDone[unitname]=nil
 local _unit=event.IniUnit
 local _group=event.IniGroup
 if _unit:IsHelicopter()or _group:IsHelicopter()then
@@ -61719,6 +62088,7 @@ elseif event.id==EVENTS.PlayerLeaveUnit then
 local unitname=event.IniUnitName or"none"
 self.CtldUnits[unitname]=nil
 self.Loaded_Cargo[unitname]=nil
+self.MenusDone[unitname]=nil
 end
 return self
 end
@@ -61912,8 +62282,10 @@ end
 local groupname=nearestGroup:GetName()
 local function matchstring(String,Table)
 local match=false
+String=string.gsub(String,"-"," ")
 if type(Table)=="table"then
 for _,_name in pairs(Table)do
+_name=string.gsub(_name,"-"," ")
 if string.find(String,_name)then
 match=true
 break
@@ -61921,6 +62293,7 @@ end
 end
 else
 if type(String)=="string"then
+Table=string.gsub(Table,"-"," ")
 if string.find(String,Table)then match=true end
 end
 end
@@ -62141,14 +62514,14 @@ if IsHerc then
 addon=180
 end
 for i=1,number do
-local cratealias=string.format("%s-%d",cratetemplate,math.random(1,100000))
+local cratealias=string.format("%s-%s-%d",cratename,cratetemplate,math.random(1,100000))
 if not self.placeCratesAhead then
 cratedistance=(i-1)*2.5+capabilities.length
 if cratedistance>self.CrateDistance then cratedistance=self.CrateDistance end
 rheading=UTILS.RandomGaussian(0,30,-90,90,100)
 rheading=math.fmod((heading+rheading+addon),360)
 else
-local initialSpacing=IsHerc and 16 or 12
+local initialSpacing=IsHerc and 16 or(capabilities.length+2)
 local crateSpacing=4
 local lateralSpacing=4
 local nrSideBySideCrates=3
@@ -62228,10 +62601,10 @@ end
 local cargotype=Cargo
 local cratesneeded=cargotype:GetCratesNeeded()
 local cratetemplate="Container"
-local cratealias=string.format("%s-%d",cratetemplate,math.random(1,100000))
 local cratename=cargotype:GetName()
 local cgotype=cargotype:GetType()
 local cgomass=cargotype:GetMass()
+local cratealias=string.format("%s-%s-%d",cratename,cratetemplate,math.random(1,100000))
 local isstatic=false
 if cgotype==CTLD_CARGO.Enum.STATIC then
 cratetemplate=cargotype:GetTemplates()
@@ -63055,6 +63428,9 @@ if _unit:IsAlive()and _unit:IsPlayer()then
 if _unit:IsHelicopter()or(self:IsHercules(_unit)and self.enableHercules)then
 local unitName=_unit:GetName()
 _UnitList[unitName]=unitName
+else
+local unitName=_unit:GetName()
+_UnitList[unitName]=nil
 end
 end
 end
@@ -63503,6 +63879,7 @@ if i==5 then IsDropped=true end
 for index,cargozone in pairs(zones[i])do
 local czone=cargozone
 local Sound=self.RadioSound
+local Silent=self.RadioSoundFC3 or self.RadioSound
 if czone.active and czone.hasbeacon then
 local FMbeacon=czone.fmbeacon
 local VHFbeacon=czone.vhfbeacon
@@ -63512,8 +63889,8 @@ local FM=FMbeacon.frequency
 local VHF=VHFbeacon.frequency
 local UHF=UHFbeacon.frequency
 self:_AddRadioBeacon(Name,Sound,FM,CTLD.RadioModulation.FM,IsShip,IsDropped)
-self:_AddRadioBeacon(Name,Sound,VHF,CTLD.RadioModulation.FM,IsShip,IsDropped)
-self:_AddRadioBeacon(Name,Sound,UHF,CTLD.RadioModulation.AM,IsShip,IsDropped)
+self:_AddRadioBeacon(Name,Sound,VHF,CTLD.RadioModulation.AM,IsShip,IsDropped)
+self:_AddRadioBeacon(Name,Silent,UHF,CTLD.RadioModulation.AM,IsShip,IsDropped)
 end
 end
 end
@@ -63686,6 +64063,9 @@ if self:IsUnitInAir(Unit)then
 local uspeed=Unit:GetVelocityMPS()
 local uheight=Unit:GetHeight()
 local ucoord=Unit:GetCoordinate()
+if not ucoord then
+return false
+end
 local gheight=ucoord:GetLandHeight()
 local aheight=uheight-gheight
 local maxh=self.maximumHoverHeight
@@ -63704,6 +64084,9 @@ if self:IsUnitInAir(Unit)then
 local uspeed=Unit:GetVelocityMPS()
 local uheight=Unit:GetHeight()
 local ucoord=Unit:GetCoordinate()
+if not ucoord then
+return false
+end
 local gheight=ucoord:GetLandHeight()
 local aheight=uheight-gheight
 local minh=self.HercMinAngels
@@ -63766,6 +64149,9 @@ minheight=5.1
 end
 local uheight=Unit:GetHeight()
 local ucoord=Unit:GetCoordinate()
+if not ucoord then
+return false
+end
 local gheight=ucoord:GetLandHeight()
 local aheight=uheight-gheight
 if aheight>=minheight then
@@ -63978,7 +64364,7 @@ end
 end
 return self
 end
-function CTLD:InjectTroops(Zone,Cargo,Surfacetypes,PreciseLocation)
+function CTLD:InjectTroops(Zone,Cargo,Surfacetypes,PreciseLocation,Structure)
 self:T(self.lid.." InjectTroops")
 local cargo=Cargo
 local function IsTroopsMatch(cargo)
@@ -63993,6 +64379,42 @@ break
 end
 end
 return match
+end
+local function Cruncher(group,typename,anzahl)
+local units=group:GetUnits()
+local reduced=0
+for _,_unit in pairs(units)do
+local typo=_unit:GetTypeName()
+if typename==typo then
+_unit:Destroy(false)
+reduced=reduced+1
+if reduced==anzahl then break end
+end
+end
+end
+local function PostSpawn(args)
+local group=args[1]
+local structure=args[2]
+if structure then
+local loadedstructure={}
+local strcset=UTILS.Split(structure,";")
+for _,_data in pairs(strcset)do
+local datasplit=UTILS.Split(_data,"==")
+loadedstructure[datasplit[1]]=tonumber(datasplit[2])
+end
+local originalstructure=UTILS.GetCountPerTypeName(group)
+for _name,_number in pairs(originalstructure)do
+local loadednumber=0
+if loadedstructure[_name]then
+loadednumber=loadedstructure[_name]
+end
+local reduce=false
+if loadednumber<_number then reduce=true end
+if reduce then
+Cruncher(group,_name,_number-loadednumber)
+end
+end
+end
 end
 if not IsTroopsMatch(cargo)then
 self.CargoCounter=self.CargoCounter+1
@@ -64027,13 +64449,16 @@ self.Engineers=self.Engineers+1
 local grpname=self.DroppedTroops[self.TroopCounter]:GetName()
 self.EngineersInField[self.Engineers]=CTLD_ENGINEERING:New(name,grpname)
 end
+if Structure then
+BASE:ScheduleOnce(0.5,PostSpawn,{self.DroppedTroops[self.TroopCounter],Structure})
+end
 if self.eventoninject then
 self:__TroopsDeployed(1,nil,nil,self.DroppedTroops[self.TroopCounter],type)
 end
 end
 return self
 end
-function CTLD:InjectVehicles(Zone,Cargo)
+function CTLD:InjectVehicles(Zone,Cargo,Surfacetypes,PreciseLocation,Structure)
 self:T(self.lid.." InjectVehicles")
 local cargo=Cargo
 local function IsVehicMatch(cargo)
@@ -64049,6 +64474,42 @@ end
 end
 return match
 end
+local function Cruncher(group,typename,anzahl)
+local units=group:GetUnits()
+local reduced=0
+for _,_unit in pairs(units)do
+local typo=_unit:GetTypeName()
+if typename==typo then
+_unit:Destroy(false)
+reduced=reduced+1
+if reduced==anzahl then break end
+end
+end
+end
+local function PostSpawn(args)
+local group=args[1]
+local structure=args[2]
+if structure then
+local loadedstructure={}
+local strcset=UTILS.Split(structure,";")
+for _,_data in pairs(strcset)do
+local datasplit=UTILS.Split(_data,"==")
+loadedstructure[datasplit[1]]=tonumber(datasplit[2])
+end
+local originalstructure=UTILS.GetCountPerTypeName(group)
+for _name,_number in pairs(originalstructure)do
+local loadednumber=0
+if loadedstructure[_name]then
+loadednumber=loadedstructure[_name]
+end
+local reduce=false
+if loadednumber<_number then reduce=true end
+if reduce then
+Cruncher(group,_name,_number-loadednumber)
+end
+end
+end
+end
 if not IsVehicMatch(cargo)then
 self.CargoCounter=self.CargoCounter+1
 cargo.ID=self.CargoCounter
@@ -64061,7 +64522,10 @@ local name=cargo:GetName()or"none"
 local temptable=cargo:GetTemplates()or{}
 local factor=1.5
 local zone=Zone
-local randomcoord=zone:GetRandomCoordinate(10,30*factor):GetVec2()
+local randomcoord=zone:GetRandomCoordinate(10,30*factor,Surfacetypes):GetVec2()
+if PreciseLocation then
+randomcoord=zone:GetCoordinate():GetVec2()
+end
 cargo:SetWasDropped(true)
 local canmove=false
 if type==CTLD_CARGO.Enum.VEHICLE then canmove=true end
@@ -64077,6 +64541,9 @@ else
 self.DroppedTroops[self.TroopCounter]=SPAWN:NewWithAlias(_template,alias)
 :InitDelayOff()
 :SpawnFromVec2(randomcoord)
+end
+if Structure then
+BASE:ScheduleOnce(0.5,PostSpawn,{self.DroppedTroops[self.TroopCounter],Structure})
 end
 if self.eventoninject then
 self:__CratesBuild(1,nil,nil,self.DroppedTroops[self.TroopCounter])
@@ -64292,6 +64759,7 @@ end
 local function FindCargoType(name,table)
 local match=false
 local cargo=nil
+name=string.gsub(name,"-"," ")
 for _ind,_cargo in pairs(table)do
 local thiscargo=_cargo
 local template=thiscargo:GetTemplates()
@@ -64299,6 +64767,7 @@ if type(template)=="string"then
 template={template}
 end
 for _,_name in pairs(template)do
+_name=string.gsub(_name,"-"," ")
 if string.find(name,_name)and _cargo:GetType()~=CTLD_CARGO.Enum.REPAIR then
 match=true
 cargo=thiscargo
@@ -64308,16 +64777,17 @@ if match then break end
 end
 return match,cargo
 end
-local data="Group,x,y,z,CargoName,CargoTemplates,CargoType,CratesNeeded,CrateMass\n"
+local data="Group,x,y,z,CargoName,CargoTemplates,CargoType,CratesNeeded,CrateMass,Structure\n"
 local n=0
 for _,_grp in pairs(grouptable)do
 local group=_grp
 if group and group:IsAlive()then
 local name=group:GetName()
-local template=string.gsub(name,"-(.+)$","")
+local template=name
 if string.find(template,"#")then
 template=string.gsub(name,"#(%d+)$","")
 end
+local template=string.gsub(name,"-(%d+)$","")
 local match,cargo=FindCargoType(template,cgotable)
 if not match then
 match,cargo=FindCargoType(template,cgovehic)
@@ -64330,6 +64800,11 @@ local cgotemp=cargo.Templates
 local cgotype=cargo.CargoType
 local cgoneed=cargo.CratesNeeded
 local cgomass=cargo.PerCrateMass
+local structure=UTILS.GetCountPerTypeName(group)
+local strucdata=""
+for typen,anzahl in pairs(structure)do
+strucdata=strucdata..typen.."=="..anzahl..";"
+end
 if type(cgotemp)=="table"then
 local templates="{"
 for _,_tmpl in pairs(cgotemp)do
@@ -64339,8 +64814,8 @@ templates=templates.."}"
 cgotemp=templates
 end
 local location=group:GetVec3()
-local txt=string.format("%s,%d,%d,%d,%s,%s,%s,%d,%d\n"
-,template,location.x,location.y,location.z,cgoname,cgotemp,cgotype,cgoneed,cgomass)
+local txt=string.format("%s,%d,%d,%d,%s,%s,%s,%d,%d,%s\n"
+,template,location.x,location.y,location.z,cgoname,cgotemp,cgotype,cgoneed,cgomass,strucdata)
 data=data..txt
 end
 end
@@ -64456,13 +64931,18 @@ cargotemplates=string.gsub(cargotemplates,"}","")
 cargotemplates=UTILS.Split(cargotemplates,";")
 local size=tonumber(dataset[8])
 local mass=tonumber(dataset[9])
+local structure=nil
+if dataset[10]then
+structure=dataset[10]
+structure=string.gsub(structure,",","")
+end
 local dropzone=ZONE_RADIUS:New("DropZone",vec2,20)
 if cargotype==CTLD_CARGO.Enum.VEHICLE or cargotype==CTLD_CARGO.Enum.FOB then
 local injectvehicle=CTLD_CARGO:New(nil,cargoname,cargotemplates,cargotype,true,true,size,nil,true,mass)
-self:InjectVehicles(dropzone,injectvehicle)
+self:InjectVehicles(dropzone,injectvehicle,self.surfacetypes,self.useprecisecoordloads,structure)
 elseif cargotype==CTLD_CARGO.Enum.TROOPS or cargotype==CTLD_CARGO.Enum.ENGINEERS then
 local injecttroops=CTLD_CARGO:New(nil,cargoname,cargotemplates,cargotype,true,true,size,nil,true,mass)
-self:InjectTroops(dropzone,injecttroops,self.surfacetypes)
+self:InjectTroops(dropzone,injecttroops,self.surfacetypes,self.useprecisecoordloads,structure)
 end
 elseif(type(groupname)=="string"and groupname=="STATIC")or cargotype==CTLD_CARGO.Enum.REPAIR then
 local cargotemplates=dataset[6]
@@ -64666,6 +65146,25 @@ self.CTLD:InjectStatics(Zone,injectstatic,true)
 end
 return self
 end
+function CTLD_HERCULES:Cargo_SpawnDroppedAsCargo(_name,_pos)
+local theCargo=self.CTLD:_FindCratesCargoObject(_name)
+if theCargo then
+self.CTLD.CrateCounter=self.CTLD.CrateCounter+1
+self.CTLD.CargoCounter=self.CTLD.CargoCounter+1
+local basetype=self.CTLD.basetype or"container_cargo"
+local theStatic=SPAWNSTATIC:NewFromType(basetype,"Cargos",self.cratecountry)
+:InitCargoMass(theCargo.PerCrateMass)
+:InitCargo(self.CTLD.enableslingload)
+:InitCoordinate(_pos)
+:Spawn(270,_name.."-Container-"..math.random(1,100000))
+self.CTLD.Spawned_Crates[self.CTLD.CrateCounter]=theStatic
+local newCargo=CTLD_CARGO:New(self.CTLD.CargoCounter,theCargo.Name,theCargo.Templates,theCargo.CargoType,true,false,theCargo.CratesNeeded,self.CTLD.Spawned_Crates[self.CTLD.CrateCounter],true,theCargo.PerCrateMass,nil,theCargo.Subcategory)
+table.insert(self.CTLD.Spawned_Cargo,newCargo)
+newCargo:SetWasDropped(true)
+newCargo:SetHasMoved(true)
+end
+return self
+end
 function CTLD_HERCULES:Cargo_SpawnObjects(Cargo_Drop_initiator,Cargo_Drop_Direction,Cargo_Content_position,Cargo_Type_name,Cargo_over_water,Container_Enclosed,ParatrooperGroupSpawn,offload_cargo,all_cargo_survive_to_the_ground,all_cargo_gets_destroyed,destroy_cargo_dropped_without_parachute,Cargo_Country)
 self:T(self.lid..'Cargo_SpawnObjects')
 local CargoHeading=self.CargoHeading
@@ -64695,8 +65194,12 @@ if Container_Enclosed==true then
 if ParatrooperGroupSpawn==true then
 self:Soldier_SpawnGroup(Cargo_Drop_initiator,Cargo_Content_position,Cargo_Type_name,CargoHeading,Cargo_Country,0)
 else
+if self.CTLD.dropAsCargoCrate then
+self:Cargo_SpawnDroppedAsCargo(Cargo_Type_name,Cargo_Content_position)
+else
 self:Cargo_SpawnGroup(Cargo_Drop_initiator,Cargo_Content_position,Cargo_Type_name,CargoHeading,Cargo_Country)
 self:Cargo_SpawnStatic(Cargo_Drop_initiator,Cargo_Content_position,"Hercules_Container_Parachute_Static",CargoHeading,false,Cargo_Country)
+end
 end
 else
 self:Cargo_SpawnStatic(Cargo_Drop_initiator,Cargo_Content_position,Cargo_Type_name,CargoHeading,true,Cargo_Country)
@@ -64924,10 +65427,10 @@ CSAR.AircraftType["Bell-47"]=2
 CSAR.AircraftType["UH-60L"]=10
 CSAR.AircraftType["AH-64D_BLK_II"]=2
 CSAR.AircraftType["Bronco-OV-10A"]=2
-CSAR.version="1.0.17"
+CSAR.version="1.0.18"
 function CSAR:New(Coalition,Template,Alias)
 local self=BASE:Inherit(self,FSM:New())
-BASE:T({Coalition,Prefixes,Alias})
+BASE:T({Coalition,Template,Alias})
 if Coalition and type(Coalition)=="string"then
 if Coalition=="blue"then
 self.coalition=coalition.side.BLUE
@@ -65895,7 +66398,7 @@ local _distance=0
 if _SETTINGS:IsImperial()then
 _distance=string.format("%.1fnm",UTILS.MetersToNM(_closest.distance))
 else
-_distance=string.format("%.1fkm",_closest.distance)
+_distance=string.format("%.1fkm",_closest.distance/1000)
 end
 local _msg=string.format("%s - Popping signal flare at your %s o\'clock. Distance %s",self:_GetCustomCallSign(_unitName),_clockDir,_distance)
 self:_DisplayMessageToSAR(_heli,_msg,self.messageTime,false,true,true)
@@ -66123,6 +66626,7 @@ end
 if _group:IsAlive()then
 local _radioUnit=_group:GetUnit(1)
 if _radioUnit then
+local name=_radioUnit:GetName()
 local Frequency=_freq
 local name=_radioUnit:GetName()
 local Sound="l10n/DEFAULT/"..self.radioSound
@@ -67674,6 +68178,15 @@ error("Unknown Squadron:"..SquadronName)
 end
 return DefenderSquadron
 end
+function AI_A2A_DISPATCHER:QuerySquadron(Squadron)
+local Squadron=self:GetSquadron(Squadron)
+if Squadron.ResourceCount then
+self:T2(string.format("%s = %s",Squadron.Name,Squadron.ResourceCount))
+return Squadron.ResourceCount
+end
+self:F({Squadron=Squadron.Name,SquadronResourceCount=Squadron.ResourceCount})
+return nil
+end
 function AI_A2A_DISPATCHER:SetSquadronVisible(SquadronName)
 self.DefenderSquadrons[SquadronName]=self.DefenderSquadrons[SquadronName]or{}
 local DefenderSquadron=self:GetSquadron(SquadronName)
@@ -69191,6 +69704,15 @@ if not DefenderSquadron then
 error("Unknown Squadron:"..SquadronName)
 end
 return DefenderSquadron
+end
+function AI_A2G_DISPATCHER:QuerySquadron(Squadron)
+local Squadron=self:GetSquadron(Squadron)
+if Squadron.ResourceCount then
+self:T2(string.format("%s = %s",Squadron.Name,Squadron.ResourceCount))
+return Squadron.ResourceCount
+end
+self:F({Squadron=Squadron.Name,SquadronResourceCount=Squadron.ResourceCount})
+return nil
 end
 function AI_A2G_DISPATCHER:IsSquadronVisible(SquadronName)
 self.DefenderSquadrons[SquadronName]=self.DefenderSquadrons[SquadronName]or{}
