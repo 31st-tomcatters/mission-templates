@@ -12,6 +12,8 @@ DEBUG_MSG = false
 DEBUG_SQ_MSG = false
 DEBUG_DETECT_MSG = false
 
+use_jtff_sound_mod = false
+
 spawnStandardDelay = 15
 
 sead = SEAD:New({})
@@ -1054,27 +1056,24 @@ function GetTableLng(tbl)
     return getN
 end
 
-function findJTFFSoundModulePath()
-    -- **** Do not forget to inject a trailing slash ****
-    --TODO: try to detect if JTFF-Missions-Sound Mod is present or not
-    local userprofilepath = os.getenv("userprofile"):gsub("\\", "/")
-    local savedgamespath = userprofilepath .. '/Saved Games'
-    local dcsfoldername = 'DCS.openbeta'
-    return savedgamespath .. '/' .. dcsfoldername .. '/Sounds/JTFF-Missions/'
-end
-
 function getSoundFilesPrefix()
     local strPrefix
+    local lfs = require("lfs")
     if (use_jtff_sound_mod) then
-        strPrefix = findJTFFSoundModulePath()
+        strPrefix = lfs.writedir() .. 'Sounds/JTFF-Missions/'
     else
         strPrefix = ""
     end
     return strPrefix
 end
 
+env.info('JTFF-SHAREDLIB: shared library loaded succesfully')
 
 soundFilesPrefix = getSoundFilesPrefix()
 
 
-env.info('JTFF-SHAREDLIB: shared library loaded succesfully')
+sound2Bip = USERSOUND:New( soundFilesPrefix .. "Misc/2_Bips.ogg" )
+sound1Bip = USERSOUND:New( soundFilesPrefix .. "Misc/Bip.ogg" )
+soundCrashWood = USERSOUND:New( soundFilesPrefix .. "Misc/crash_wood.ogg" )
+
+sound1Bip:ToAll()

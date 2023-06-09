@@ -22,7 +22,7 @@ function detectShitHotBreak(objAirboss)
 
                 local player_velocity_round = math.floor((player_velocity/10))*10
 
-                local Play_SH_Sound = USERSOUND:New( "AIRBOSS/Airboss Soundfiles/GreatBallsOfFire.ogg" )
+                local Play_SH_Sound = USERSOUND:New( soundFilesPrefix .. "AIRBOSS/Airboss Soundfiles/GreatBallsOfFire.ogg" )
                 --trigger.action.outText(player_name..' altitude is '..player_alt, 5)
                 --trigger.action.outText(player_name..' speed is '..player_velocity, 5)
                 if client_in_zone_flag == nil then

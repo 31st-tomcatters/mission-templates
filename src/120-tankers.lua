@@ -484,9 +484,9 @@ end
 --local RestrToCoal = nil
 tankersOnDemandArray = {}
 local TankerMarkHandler = {}
-local CmdSymbol = "-"
 
 function TankerMarkHandler:onEvent(event)
+    local CmdSymbol = "-"
 
     if event.id == 25 then
         --trigger.action.outText(" ", 0, true)

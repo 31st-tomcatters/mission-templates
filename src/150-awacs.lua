@@ -153,7 +153,7 @@ function triggerOnDemandAwacs(type, askedDuration, askedFL, askedSpeed, askedAnc
                             else
                                 OnDemandAwacs.orbit = {
                                     heading = askedOrbitHeading % 360,
-                                    length = math.max(10, OnDemandAwacs.orbit.length),
+                                    length = math.max(5, OnDemandAwacs.orbit.length),
                                 }
                             end
                         else
@@ -172,7 +172,7 @@ function triggerOnDemandAwacs(type, askedDuration, askedFL, askedSpeed, askedAnc
                         if (not(OnDemandAwacs.orbit.length)) then
                             OnDemandAwacs.orbit.length = 30
                         else
-                            OnDemandAwacs.orbit.length = math.max(10, OnDemandAwacs.orbit.length)
+                            OnDemandAwacs.orbit.length = math.max(5, OnDemandAwacs.orbit.length)
                         end
                     else
                         OnDemandAwacs.orbit = {
@@ -493,9 +493,10 @@ end
 --local RestrToCoal = nil
 awacsOnDemandArray = {}
 local AwacsMarkHandler = {}
-local awacsCmdSymbol = "-"
+
 
 function AwacsMarkHandler:onEvent(event)
+    local awacsCmdSymbol = "-"
 
     if event.id == 25 then
         --trigger.action.outText(" ", 0, true)

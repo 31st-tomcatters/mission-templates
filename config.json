@@ -3,7 +3,7 @@
         "missionFolder": "dist",
         "missionPrefix": "training",
         "missionSuffix": "31st",
-        "missionVersion": "0.5.0-snapshot"
+        "missionVersion": "1.1.0-snapshot"
     },
     "google": {
         "scopes": [

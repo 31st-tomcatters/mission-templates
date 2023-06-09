@@ -9,8 +9,8 @@ for index, foxzoneconfig in ipairs(FoxRangesConfig) do
         env.info('creation Fox Zone : '.. foxzoneconfig.name..'...')
         local objFoxZone = FOX:New()
         objFoxZone:SetExplosionPower(0.01)
-                  :SetExplosionDistance(100)
-                  :SetExplosionDistanceBigMissiles(150)
+                  :SetExplosionDistance(foxzoneconfig.distance_small_missile or 100)
+                  :SetExplosionDistanceBigMissiles(foxzoneconfig.distance_big_missile or 150)
                   :SetDefaultMissileDestruction(foxzoneconfig.missileDestruction)
                   :SetDefaultLaunchAlerts(foxzoneconfig.missileLaunchMessages)
                   :SetDefaultLaunchMarks(false)
@@ -68,9 +68,9 @@ for index, foxzoneconfig in ipairs(FoxRangesConfig) do
             local message = ''
             if (clientShooter) then
                 local playerNameShooter = clientShooter:GetPlayerName()
-                message = playerNameTargeted .. ' HAVE BEEN SHOOT BY ' .. playerNameShooter
+                message = playerNameTargeted .. ' HAS BEEN SHOT DOWN BY ' .. playerNameShooter
             else
-                message = playerNameTargeted .. ' HAVE BEEN SHOOT BY ' .. unitShooter:GetName()
+                message = playerNameTargeted .. ' HAS BEEN SHOT DOWN BY ' .. unitShooter:GetName()
             end
             debug_msg(message)
             Set_CLIENT:ForEachClientInZone(objFoxZone.objSafeZone, function(clientInZone)
