@@ -1,4 +1,4 @@
-env.info('*** MOOSE GITHUB Commit Hash ID: 2023-06-08T11:59:59.0000000Z-afe2b675e52abe0bbb0c4343777ab4905c3b7a61 ***')
+env.info('*** MOOSE GITHUB Commit Hash ID: 2023-06-10T08:08:22.0000000Z-f1fc9f0b2775a645e6fc92fcee8f2015c14c5eaf ***')
 env.info('*** MOOSE STATIC INCLUDE START *** ')
 ENUMS={}
 ENUMS.ROE={
@@ -2142,6 +2142,7 @@ TheChannel="TheChannel",
 Syria="Syria",
 MarianaIslands="MarianaIslands",
 Falklands="Falklands",
+Sinai="SinaiMap"
 }
 CALLSIGN={
 Aircraft={
@@ -2986,6 +2987,8 @@ elseif map==DCSMAP.MarianaIslands then
 declination=2
 elseif map==DCSMAP.Falklands then
 declination=12
+elseif map==DCSMAP.Sinai then
+declination=4.8
 else
 declination=0
 end
@@ -3143,6 +3146,8 @@ elseif theatre==DCSMAP.MarianaIslands then
 return 10
 elseif theatre==DCSMAP.Falklands then
 return-3
+elseif theatre==DCSMAP.Sinai then
+return 2
 else
 BASE:E(string.format("ERROR: Unknown Map %s in UTILS.GMTToLocal function. Returning 0",tostring(theatre)))
 return 0
@@ -26560,6 +26565,38 @@ AIRBASE.SouthAtlantic={
 ["Aerodromo_O_Higgins"]="Aerodromo O'Higgins",
 ["Cullen_Airport"]="Cullen Airport",
 ["Gull_Point"]="Gull Point",
+}
+AIRBASE.Sinai={
+["Hatzerim"]="Hatzerim",
+["Abu_Suwayr"]="Abu Suwayr",
+["Sde_Dov"]="Sde Dov",
+["AzZaqaziq"]="AzZaqaziq",
+["Hatzor"]="Hatzor",
+["Kedem"]="Kedem",
+["Nevatim"]="Nevatim",
+["Cairo_International_Airport"]="Cairo International Airport",
+["Al_Ismailiyah"]="Al Ismailiyah",
+["As_Salihiyah"]="As Salihiyah",
+["Fayed"]="Fayed",
+["Bilbeis_Air_Base"]="Bilbeis Air Base",
+["Ramon_Airbase"]="Ramon Airbase",
+["Kibrit_Air_Base"]="Kibrit Air Base",
+["El_Arish"]="El Arish",
+["Ovda"]="Ovda",
+["Melez"]="Melez",
+["Al_Mansurah"]="Al Mansurah",
+["Palmahim"]="Palmahim",
+["Baluza"]="Baluza",
+["El_Gora"]="El Gora",
+["Difarsuwar_Airfield"]="Difarsuwar Airfield",
+["Wadi_al_Jandali"]="Wadi al Jandali",
+["St_Catherine"]="St Catherine",
+["Tel_Nof"]="Tel Nof",
+["Abu_Rudeis"]="Abu Rudeis",
+["Inshas_Airbase"]="Inshas Airbase",
+["Ben-Gurion"]="Ben-Gurion",
+["Bir_Hasanah"]="Bir Hasanah",
+["Cairo_West"]="Cairo West",
 }
 AIRBASE.TerminalType={
 Runway=16,

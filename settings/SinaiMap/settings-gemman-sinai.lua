@@ -3,4 +3,4 @@
 --- Created by oufy.
 --- DateTime: 18/09/2021 15:45
 ---
-missionName = "Training_Syria"
+missionName = "Training_Sinaï"
