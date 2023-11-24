@@ -1,0 +1,57 @@
+stages:
+  - build
+  - publish
+
+include:
+  - remote: 'https://api.r2devops.dt-klanik.com/job/r/gitlab/dt-klanik-sharedlibs/r2devops-sharedlibs/build-npm@~0.1.yaml'
+
+build:
+  variables:
+    NODE_DOCKER_IMAGE_TAG: '18-alpine'
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "master" || $CI_COMMIT_REF_NAME == "main" || $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH || $CI_JOB_MANUAL == "true"'
+
+
+
+#set-version:
+#  stage: .pre
+#  image: node:18-alpine
+#  tags:
+#    - $RUNNER_TAG
+#  script:
+#    - npm install
+#    - npm run nextversion-prepare
+#  artifacts:
+#    paths:
+#      - config.json
+
+.publish:
+  image: node:18-alpine
+  stage: publish
+  variables:
+    NPM_TARGET: ftp-upload
+    CRED_FILE: ftp-jtff-creds.sh
+  tags:
+    - $RUNNER_TAG
+  script:
+    - apk add git-crypt
+    - echo "${GIT_CRYPT_KEY_BASE_64}" | base64 -d > git_crypt_key
+    - git-crypt unlock git_crypt_key
+    - . ./deploy-creds/${CRED_FILE}
+    - npm install
+    - npm run ${NPM_TARGET}
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "master" || $CI_COMMIT_REF_NAME == "main" || $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH || $CI_JOB_MANUAL == "true"'
+
+
+publish-31st:
+  extends: ".publish"
+  variables:
+    NPM_TARGET: ftp-upload
+    CRED_FILE: ftp-31st-creds.sh
+
+publish-gdrive:
+  extends: ".publish"
+  variables:
+    NPM_TARGET: gdrive-upload
+    CRED_FILE: gdrive-31st-creds.sh

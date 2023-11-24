@@ -4,16 +4,15 @@
   "description": "build 31st-template missions",
   "main": "none",
   "scripts": {
-    "build": "node src/nodejs/build.js",
-    "clean": "node src/nodejs/clean.js",
-    "template-update": "node src/nodejs/template-update.js",
-    "nextversion-prepare": "node src/nodejs/prepare-nextversion.js",
-    "version": "node src/nodejs/getset-version.js",
-    "release": "node src/nodejs/release.js",
-    "getmiz": "node src/nodejs/get-mizfiles.js",
-    "gdrive-upload": "node src/nodejs/gdrive-upload.js",
-    "ftp-upload": "node src/nodejs/ftpupload.js",
-    "inject-scripts": "node src/nodejs/inject-scripts.js"
+    "build": "node .workspace/src/nodejs/build.js",
+    "clean": "node .workspace/src/nodejs/clean.js",
+    "template-update": "node .workspace/src/nodejs/template-update.js",
+    "nextversion-prepare": "node .workspace/src/nodejs/prepare-nextversion.js",
+    "version": "node .workspace/src/nodejs/getset-version.js",
+    "release": "node .workspace/src/nodejs/release.js",
+    "getmiz": "node .workspace/src/nodejs/get-mizfiles.js",
+    "gdrive-upload": "node .workspace/src/nodejs/gdrive-upload.js",
+    "ftp-upload": "node .workspace/src/nodejs/ftpupload.js"
   },
   "repository": {
     "type": "git",
@@ -26,6 +25,6 @@
   },
   "homepage": "https://github.com/31st-tomcatters/mission-templates#readme",
   "dependencies": {
-    "@jtff/miztemplate-lib": "^2.1.6"
+    "@jtff/miztemplate-lib": "latest"
   }
 }
